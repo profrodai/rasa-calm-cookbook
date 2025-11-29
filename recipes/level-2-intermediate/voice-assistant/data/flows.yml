@@ -1,0 +1,82 @@
+flows:
+  # Welcome and Help
+  welcome:
+    description: Greet the user and offer assistance
+    steps:
+      - action: utter_greet
+      - action: utter_help
+
+  # Check Balance
+  check_balance:
+    description: Check account balance for checking or savings account
+    steps:
+      - collect: account_type
+        description: "checking or savings account"
+        rejections:
+          - if: slots.account_type not in ["checking", "savings", "check", "save"]
+            utter: utter_ask_account_type
+      - action: action_get_account_balance
+      - action: utter_provide_balance
+      - action: utter_can_do_something_else
+
+  # Transfer Money
+  transfer_money:
+    description: Transfer money between user's accounts
+    steps:
+      - collect: transfer_from_account
+        description: "source account - checking or savings"
+      - collect: transfer_to_account
+        description: "destination account - checking or savings"
+      - collect: transfer_amount
+        description: "amount in dollars to transfer"
+      - collect: transfer_confirmation
+        description: "user confirms the transfer"
+        next:
+          - if: not slots.transfer_confirmation
+            then:
+              - action: utter_transfer_cancelled
+                next: END
+          - else: process_transfer
+      - action: action_process_transfer
+        id: process_transfer
+      - action: utter_transfer_complete
+      - action: utter_can_do_something_else
+
+  # Report Lost Card
+  report_lost_card:
+    description: Report a lost or stolen credit or debit card and block it
+    steps:
+      - action: utter_card_loss_acknowledge
+      - collect: card_last_four
+        description: "last four digits of the card"
+        rejections:
+          - if: not (slots.card_last_four matches "^\d{4}$")
+            utter: utter_ask_card_last_four
+      - action: action_block_card
+        next:
+          - if: slots.card_blocked
+            then:
+              - action: utter_card_blocked
+          - else:
+              - action: utter_card_block_failed
+      - action: utter_can_do_something_else
+
+  # Transaction History
+  transaction_history:
+    description: Show recent account transactions
+    steps:
+      - action: action_get_transactions
+      - action: utter_show_transactions
+      - action: utter_can_do_something_else
+
+  # Help
+  help:
+    description: Explain what the assistant can do
+    steps:
+      - action: utter_help
+
+  # Goodbye
+  goodbye:
+    description: End the conversation politely
+    steps:
+      - action: utter_goodbye

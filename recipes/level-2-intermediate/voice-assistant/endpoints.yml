@@ -1,0 +1,7 @@
+# Action Server
+action_endpoint:
+  url: "http://localhost:5055/webhook"
+
+# Silence Handling for Voice
+interaction_handling:
+  global_silence_timeout: 7  # seconds to wait before timeout
