@@ -1,7 +1,6 @@
 # rasa-calm-cookbook/pyproject.toml (root project)
-[build-system]
-requires = ["hatchling>=1.18.0"]
-build-backend = "hatchling.build"
+# This is a cookbook/tutorial repository, not a library
+# Each recipe is self-contained and should be run independently
 
 [project]
 name = "rasa-calm-cookbook"
@@ -55,9 +54,13 @@ azure = [
 ]
 
 voice = [
-    "speechrecognition>=3.10.0",
-    "pydub>=0.25.0",
-    "pyaudio>=0.2.11",
+    "websockets>=10.0",
+    "aiohttp>=3.8.0",
+]
+
+voice-full = [
+    "rasa-calm-cookbook[voice]",
+    "pyaudio>=0.2.11",  # Requires: brew install portaudio (macOS) or apt-get install portaudio19-dev (Linux)
 ]
 
 search = [
@@ -81,32 +84,11 @@ advanced = ["rasa-calm-cookbook[openai,azure,voice,search,deployment]"]
 all = ["rasa-calm-cookbook[openai,azure,voice,search,deployment,dev]"]
 
 [project.urls]
-"Homepage" = "https://github.com/rodriveraai/rasa-calm-cookbook"
-"Documentation" = "https://github.com/rodriveraai/rasa-calm-cookbook/docs"
-"Repository" = "https://github.com/rodriveraai/rasa-calm-cookbook"
-"Bug Tracker" = "https://github.com/rodriveraai/rasa-calm-cookbook/issues"
-"Discussions" = "https://github.com/rodriveraai/rasa-calm-cookbook/discussions"
-
-# Build configuration - FIX: Specify what to include in the package (recipes collection)
-[tool.hatch.build.targets.wheel]
-include = ["recipes"]
-artifacts = ["recipes/**/*"]
-
-[tool.hatch.build]
-exclude = [
-    "/.github",
-    "/.venv",
-    "/.mypy_cache",
-    "/.pytest_cache",
-    "/.ruff_cache",
-    "/docs/_build",
-    "**/__pycache__",
-    "**/*.pyc",
-    "**/*.pyo",
-    "**/*.pyd",
-    "**/models/*",
-    "**/logs/*",
-]
+"Homepage" = "https://github.com/ducktyper-ai/rasa-calm-cookbook"
+"Documentation" = "https://github.com/ducktyper-ai/rasa-calm-cookbook/docs"
+"Repository" = "https://github.com/ducktyper-ai/rasa-calm-cookbook"
+"Bug Tracker" = "https://github.com/ducktyper-ai/rasa-calm-cookbook/issues"
+"Discussions" = "https://github.com/ducktyper-ai/rasa-calm-cookbook/discussions"
 
 # Tool configurations shared across all recipes
 [tool.ruff]

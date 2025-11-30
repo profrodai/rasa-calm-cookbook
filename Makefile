@@ -80,38 +80,75 @@ install-core: ## Install core Rasa dependencies
 	  echo "${YELLOW}Virtual environment not found. Creating it first...${RESET}"; \
 	  make env; \
 	fi
-	$(UV) pip install -e "." --python $(REPO_ROOT)/$(VENV_NAME)/bin/python
+	$(UV) pip install rasa-pro rasa-sdk --python $(REPO_ROOT)/$(VENV_NAME)/bin/python
 	@echo "${GREEN}Core dependencies installed successfully${RESET}"
 
 .PHONY: install-dev
 install-dev: ## Install development dependencies
 	@echo "${BLUE}Installing development dependencies...${RESET}"
-	$(UV) pip install -e ".[dev]" --python $(REPO_ROOT)/$(VENV_NAME)/bin/python
+	$(UV) pip install pytest pytest-cov pytest-asyncio ruff mypy isort black pre-commit --python $(REPO_ROOT)/$(VENV_NAME)/bin/python
 	@echo "${GREEN}Development dependencies installed successfully${RESET}"
 
 .PHONY: install-basic
 install-basic: ## Install basic recipe dependencies
 	@echo "${BLUE}Installing basic recipe dependencies...${RESET}"
-	$(UV) pip install -e ".[basic]" --python $(REPO_ROOT)/$(VENV_NAME)/bin/python
+	$(UV) pip install openai --python $(REPO_ROOT)/$(VENV_NAME)/bin/python
 	@echo "${GREEN}Basic dependencies installed successfully${RESET}"
 
 .PHONY: install-intermediate
 install-intermediate: ## Install intermediate recipe dependencies
 	@echo "${BLUE}Installing intermediate recipe dependencies...${RESET}"
-	$(UV) pip install -e ".[intermediate]" --python $(REPO_ROOT)/$(VENV_NAME)/bin/python
+	@echo "${YELLOW}Note: Skipping pyaudio (requires system libraries)${RESET}"
+	@echo "For full voice support, run: ${GREEN}make install-system-deps && make install-voice-full${RESET}"
+	$(UV) pip install openai websockets aiohttp faiss-cpu qdrant-client pymilvus sentence-transformers --python $(REPO_ROOT)/$(VENV_NAME)/bin/python
 	@echo "${GREEN}Intermediate dependencies installed successfully${RESET}"
+
+.PHONY: install-voice-full
+install-voice-full: ## Install full voice dependencies (requires system libraries)
+	@echo "${BLUE}Installing full voice dependencies...${RESET}"
+	$(UV) pip install websockets aiohttp pyaudio --python $(REPO_ROOT)/$(VENV_NAME)/bin/python
+	@echo "${GREEN}Full voice dependencies installed${RESET}"
 
 .PHONY: install-advanced
 install-advanced: ## Install advanced recipe dependencies
 	@echo "${BLUE}Installing advanced recipe dependencies...${RESET}"
-	$(UV) pip install -e ".[advanced]" --python $(REPO_ROOT)/$(VENV_NAME)/bin/python
+	$(UV) pip install openai azure-cognitiveservices-speech azure-storage-blob websockets aiohttp \
+		faiss-cpu qdrant-client pymilvus sentence-transformers docker kubernetes redis psycopg2-binary \
+		--python $(REPO_ROOT)/$(VENV_NAME)/bin/python
 	@echo "${GREEN}Advanced dependencies installed successfully${RESET}"
 
 .PHONY: install-all
 install-all: ## Install all dependencies
 	@echo "${BLUE}Installing all dependencies...${RESET}"
-	$(UV) pip install -e ".[all]" --python $(REPO_ROOT)/$(VENV_NAME)/bin/python
+	@echo "${YELLOW}Note: Voice dependencies (pyaudio) require system libraries${RESET}"
+	@echo "If installation fails, run: ${GREEN}make install-system-deps${RESET}"
+	$(UV) pip install rasa-pro rasa-sdk openai azure-cognitiveservices-speech azure-storage-blob \
+		websockets aiohttp faiss-cpu qdrant-client pymilvus sentence-transformers \
+		docker kubernetes redis psycopg2-binary \
+		pytest pytest-cov pytest-asyncio ruff mypy isort black pre-commit \
+		--python $(REPO_ROOT)/$(VENV_NAME)/bin/python || \
+	(echo "${RED}Installation failed. Try: make install-system-deps${RESET}" && exit 1)
 	@echo "${GREEN}All dependencies installed successfully${RESET}"
+
+.PHONY: install-system-deps
+install-system-deps: ## Install system-level dependencies for voice support
+	@echo "${BLUE}Installing system dependencies...${RESET}"
+	@if command -v brew >/dev/null 2>&1; then \
+		echo "Installing PortAudio via Homebrew..."; \
+		brew install portaudio; \
+	elif command -v apt-get >/dev/null 2>&1; then \
+		echo "Installing PortAudio via apt-get..."; \
+		sudo apt-get update && sudo apt-get install -y portaudio19-dev; \
+	else \
+		echo "${YELLOW}Could not detect package manager.${RESET}"; \
+		echo "Please install PortAudio manually:"; \
+		echo "  macOS: brew install portaudio"; \
+		echo "  Ubuntu/Debian: sudo apt-get install portaudio19-dev"; \
+		echo "  Fedora: sudo dnf install portaudio-devel"; \
+		exit 1; \
+	fi
+	@echo "${GREEN}System dependencies installed${RESET}"
+	@echo "${YELLOW}Now run: make install-all${RESET}"
 
 .PHONY: setup
 setup: ## Create environment and install development dependencies
@@ -240,7 +277,7 @@ check-recipe-context: ## Check if we're in a valid recipe context
 
 .PHONY: check-license
 check-license: ## Check for Rasa license
-	@if [ -z "$RASA_LICENSE" ]; then \
+	@if [ -z "$$RASA_LICENSE" ]; then \
 	  echo "${RED}Error: RASA_LICENSE environment variable not set${RESET}"; \
 	  echo "Export your Rasa license: export RASA_LICENSE='your-license-key'"; \
 	  exit 1; \
@@ -510,7 +547,8 @@ clean-models: ## Clean trained models from all recipes
 .PHONY: update
 update: ## Update all dependencies
 	@echo "${BLUE}Updating dependencies...${RESET}"
-	$(UV) pip install --upgrade -e ".[dev]" --python $(REPO_ROOT)/$(VENV_NAME)/bin/python
+	$(UV) pip install --upgrade rasa-pro rasa-sdk pytest pytest-cov pytest-asyncio ruff mypy isort black pre-commit \
+		--python $(REPO_ROOT)/$(VENV_NAME)/bin/python
 	@echo "${GREEN}✓ Dependencies updated${RESET}"
 
 .PHONY: docs
@@ -528,25 +566,25 @@ validate-all: ## Validate all recipes
 	@echo "${BLUE}Validating all recipes...${RESET}"
 	@error_count=0; \
 	for level in $(RECIPE_LEVELS); do \
-	  if [ -d "recipes/$level" ]; then \
-	    for recipe in recipes/$level/*/; do \
-	      if [ -d "$recipe" ]; then \
-	        recipe_name=$(basename "$recipe"); \
-	        echo "Validating $level/$recipe_name..."; \
-	        if ! RECIPE_TARGET=$recipe_name RECIPE_LEVEL=$level make validate-recipe >/dev/null 2>&1; then \
-	          echo "${RED}✗ $level/$recipe_name failed validation${RESET}"; \
-	          error_count=$((error_count + 1)); \
+	  if [ -d "recipes/$$level" ]; then \
+	    for recipe in recipes/$$level/*/; do \
+	      if [ -d "$$recipe" ]; then \
+	        recipe_name=$$(basename "$$recipe"); \
+	        echo "Validating $$level/$$recipe_name..."; \
+	        if ! RECIPE_TARGET=$$recipe_name RECIPE_LEVEL=$$level make validate-recipe >/dev/null 2>&1; then \
+	          echo "${RED}✗ $$level/$$recipe_name failed validation${RESET}"; \
+	          error_count=$$((error_count + 1)); \
 	        else \
-	          echo "${GREEN}✓ $level/$recipe_name${RESET}"; \
+	          echo "${GREEN}✓ $$level/$$recipe_name${RESET}"; \
 	        fi; \
 	      fi; \
 	    done; \
 	  fi; \
 	done; \
-	if [ $error_count -eq 0 ]; then \
+	if [ $$error_count -eq 0 ]; then \
 	  echo "${GREEN}✓ All recipes validated successfully${RESET}"; \
 	else \
-	  echo "${RED}✗ $error_count recipes failed validation${RESET}"; \
+	  echo "${RED}✗ $$error_count recipes failed validation${RESET}"; \
 	  exit 1; \
 	fi
 
@@ -559,13 +597,13 @@ structure: ## Show project structure
 	@echo "${YELLOW}Rasa CALM Cookbook Structure:${RESET}"
 	@echo "${BLUE}"
 	@if command -v tree > /dev/null; then \
-		tree -a -I '.git|.venv|__pycache__|*.pyc|*.pyo|*.pyd|.pytest_cache|.ruff_cache|.coverage|htmlcov'; \
+		tree -a -I '.git|.venv|__pycache__|*.pyc|*.pyo|*.pyd|.pytest_cache|.ruff_cache|.coverage|htmlcov|models|logs|*.tar.gz' -L 3; \
 	else \
 		find . -not -path '*/\.*' -not -path '*.pyc' -not -path '*/__pycache__/*' \
 			-not -path './.venv/*' -not -path './build/*' -not -path './dist/*' \
-			-not -path './*.egg-info/*' \
-			| sort | \
-			sed -e "s/[^-][^\/]*\// │   /g" -e "s/├── /│── /" -e "s/└── /└── /"; \
+			-not -path './models/*' -not -path './logs/*' -not -path '*.tar.gz' \
+			| head -50 | sort | \
+			sed -e "s/[^-][^\/]*\// │   /g" -e "s/├── /├── /" -e "s/└── /└── /"; \
 	fi
 	@echo "${RESET}"
 
@@ -585,8 +623,7 @@ quick-start: ## Quick start with basic tutorial
 	@echo "  3. ${GREEN}make train${RESET}"
 	@echo "  4. ${GREEN}make inspect${RESET}"
 
-# Add to root Makefile
-
+# Environment setup utilities
 .PHONY: setup-env-all
 setup-env-all: ## Create .env files for all recipes
 	@echo "${BLUE}Setting up environment files for all recipes...${RESET}"
@@ -636,7 +673,5 @@ check-env-all: ## Check environment setup for all recipes
 		echo "${YELLOW}⚠ $$error_count recipes missing .env files${RESET}"; \
 		echo "Run 'make setup-env-all' to create them"; \
 	fi
-
-
 
 .DEFAULT_GOAL := help
