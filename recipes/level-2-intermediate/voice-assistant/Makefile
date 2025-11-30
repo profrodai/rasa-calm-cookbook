@@ -239,16 +239,33 @@ status: ## Show environment status
 	fi
 
 .PHONY: setup-recipe
-setup-recipe: check-venv setup-env ## Install recipe-specific dependencies
-	@echo "${BLUE}Installing recipe dependencies...${RESET}"
-	@if [ -f "pyproject.toml" ]; then \
-	  echo "Installing dependencies from pyproject.toml..."; \
-	  $(UV) pip install -e . --python $(PYTHON); \
+setup-recipe: check-venv setup-env ## Verify recipe dependencies are installed
+	@echo "${BLUE}Checking recipe dependencies...${RESET}"
+	@echo "${YELLOW}Note: This recipe requires voice dependencies${RESET}"
+	@echo "${YELLOW}If not already installed, run from root:${RESET}"
+	@echo "  ${GREEN}cd $(REPO_ROOT)${RESET}"
+	@echo "  ${GREEN}make install-intermediate${RESET}  # Base voice dependencies"
+	@echo "  ${GREEN}make install-system-deps${RESET}   # PortAudio (if needed)"
+	@echo "  ${GREEN}make install-voice-full${RESET}    # PyAudio (optional)"
+	@echo ""
+	@echo "${BLUE}Verifying required dependencies...${RESET}"
+	@missing_deps=false; \
+	for pkg in openai websockets aiohttp; do \
+		if ! $(PYTHON) -c "import $$pkg" 2>/dev/null; then \
+			echo "${RED}✗ $$pkg not installed${RESET}"; \
+			missing_deps=true; \
+		else \
+			echo "${GREEN}✓ $$pkg is installed${RESET}"; \
+		fi; \
+	done; \
+	if [ "$$missing_deps" = "true" ]; then \
+		echo ""; \
+		echo "${YELLOW}Installing missing dependencies...${RESET}"; \
+		$(UV) pip install openai websockets aiohttp --python $(PYTHON); \
+		echo "${GREEN}✓ Missing dependencies installed${RESET}"; \
 	else \
-	  echo "${YELLOW}No pyproject.toml found, installing base dependencies${RESET}"; \
-	  $(UV) pip install rasa-pro rasa-sdk openai --python $(PYTHON); \
+		echo "${GREEN}✓ All required dependencies are installed${RESET}"; \
 	fi
-	@echo "${GREEN}✓ Recipe dependencies installed${RESET}"
 
 .PHONY: config-openai
 config-openai: ## Use OpenAI configuration
