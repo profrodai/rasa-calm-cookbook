@@ -1,12 +1,14 @@
-[build-system]
-requires = ["hatchling>=1.18.0"]
-build-backend = "hatchling.build"
-
 [project]
 name = "basic-tutorial"
 version = "0.1.0"
 description = "Basic money transfer assistant tutorial"
 requires-python = ">=3.10,<3.12"
+
+# Note: This is a Rasa project, not a Python package.
+# Dependencies should be installed at the root level via:
+#   make install-basic  (from root)
+# This pyproject.toml serves as documentation only.
+
 dependencies = [
     "rasa-pro>=3.8.0",
     "rasa-sdk>=3.8.0",
@@ -17,26 +19,31 @@ dependencies = [
 azure = [
     "azure-cognitiveservices-speech>=1.30.0",
 ]
+
 test = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
 ]
 
-# Build configuration for recipe collection
-[tool.hatch.build.targets.wheel]
-include = [
-    "*.yml",
-    "*.yaml", 
-    "*.md",
-    "data/**/*",
-    "actions/**/*",
-    "tests/**/*",
-    "conversations/**/*"
-]
-
 [tool.ruff]
 line-length = 88
 target-version = "py310"
+exclude = [
+    ".venv",
+    "models",
+    "logs",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+]
+
+[tool.ruff.lint.per-file-ignores]
+"actions/*.py" = ["ANN"]  # Disable annotation warnings in actions
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

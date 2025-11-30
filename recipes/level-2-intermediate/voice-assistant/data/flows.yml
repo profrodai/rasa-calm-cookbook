@@ -13,7 +13,7 @@ flows:
       - collect: account_type
         description: "checking or savings account"
         rejections:
-          - if: slots.account_type not in ["checking", "savings", "check", "save"]
+          - if: slots.account_type != "checking" and slots.account_type != "savings"
             utter: utter_ask_account_type
       - action: action_get_account_balance
       - action: utter_provide_balance
@@ -57,9 +57,12 @@ flows:
           - if: slots.card_blocked
             then:
               - action: utter_card_blocked
+                next: after_card_action  # ← FIXED: Added next
           - else:
               - action: utter_card_block_failed
-      - action: utter_can_do_something_else
+                next: after_card_action  # ← FIXED: Added next
+      - id: after_card_action
+        action: utter_can_do_something_else
 
   # Transaction History
   transaction_history:

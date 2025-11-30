@@ -29,7 +29,7 @@ help: ## Show this help message
 	@echo '${YELLOW}Rasa CALM Cookbook - Development Guide${RESET}'
 	@echo ''
 	@echo '${YELLOW}Quick Start:${RESET}'
-	@echo '  Setup:        ${GREEN}make setup${RESET}              - Complete development environment'
+	@echo '  Setup:        ${GREEN}make setup${RESET}              - Create venv + install Rasa + dev tools + basic deps'
 	@echo '  Recipe:       ${GREEN}make recipe RECIPE_TARGET=basic-tutorial${RESET} - Work with specific recipe'
 	@echo '  Activate:     ${GREEN}source .venv/bin/activate${RESET} - Activate environment'
 	@echo ''
@@ -154,6 +154,7 @@ install-system-deps: ## Install system-level dependencies for voice support
 setup: ## Create environment and install development dependencies
 	@echo "${BLUE}Setting up complete development environment...${RESET}"
 	make env
+	make install-core
 	make install-dev
 	make install-basic
 	@echo ""
