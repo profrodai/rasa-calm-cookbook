@@ -261,65 +261,237 @@ async def synthesize_speech(text: str, output_file: Path) -> None:
 # Example usage
 # ============================================================================
 
-async def example_test():
-    """Example: Full voice test with real ASR/TTS."""
+async def test_check_balance_flow():
+    """Test: Complete check balance conversation flow."""
+    print(f"\n{Colors.BLUE}{'='*60}{Colors.RESET}")
+    print(f"{Colors.BLUE}Test: Check Balance Flow{Colors.RESET}")
+    print(f"{Colors.BLUE}{'='*60}{Colors.RESET}\n")
     
-    print("Testing voice pipeline with real services...\n")
+    sender_id = "voice-test-balance"
+    audio_dir = Path("tests/audio")
+    output_dir = Path("tests/audio_responses/check_balance")
+    output_dir.mkdir(parents=True, exist_ok=True)
     
-    sender_id = "voice-production-test"
+    # Define the conversation flow
+    conversation = [
+        ("check_balance.wav", "What's my balance?"),
+        ("checking.wav", "Checking"),
+    ]
     
-    # 1. Transcribe test audio
-    test_audio = Path("tests/audio/check_balance.wav")
-    if not test_audio.exists():
-        print(f"Test audio not found: {test_audio}")
-        return
-    
-    print(f"1. Transcribing: {test_audio}")
-    user_text = await transcribe_audio(test_audio)
-    print(f"   Transcribed: '{user_text}'\n")
-    
-    # 2. Send to Rasa
-    print(f"2. Sending to Rasa...")
     async with aiohttp.ClientSession() as session:
-        response = await session.post(
-            "http://localhost:5005/webhooks/rest/webhook",
-            json={"sender": sender_id, "message": user_text}
-        )
-        
-        if response.status == 200:
+        for turn, (audio_file, expected_text) in enumerate(conversation, 1):
+            print(f"{Colors.BLUE}Turn {turn}/{len(conversation)}{Colors.RESET}")
+            
+            # 1. Transcribe audio
+            audio_path = audio_dir / audio_file
+            print(f"  1. Transcribing: {audio_file}")
+            user_text = await transcribe_audio(audio_path)
+            print(f"     User said: '{user_text}'\n")
+            
+            # 2. Send to Rasa
+            print(f"  2. Sending to Rasa...")
+            response = await session.post(
+                "http://localhost:5005/webhooks/rest/webhook",
+                json={"sender": sender_id, "message": user_text}
+            )
+            
+            if response.status != 200:
+                print(f"     {Colors.RED}Error: {response.status}{Colors.RESET}\n")
+                return False
+            
             bot_responses = await response.json()
-        elif response.status == 404:
-            print(f"   {Colors.RED}Error: REST channel not configured{Colors.RESET}")
-            print(f"\n   {Colors.YELLOW}Solution:{Colors.RESET}")
-            print(f"   1. Add this to data/credentials.yml:")
-            print(f"      {Colors.GREEN}rest:{Colors.RESET}")
-            print(f"   2. Restart Rasa: {Colors.GREEN}make run{Colors.RESET}\n")
-            return
-        else:
-            error_text = await response.text()
-            print(f"   {Colors.RED}Error: {response.status} - {error_text}{Colors.RESET}\n")
-            return
+            bot_text = " ".join([msg['text'] for msg in bot_responses if 'text' in msg])
+            print(f"     Bot said: '{bot_text}'\n")
+            
+            # 3. Synthesize speech
+            if bot_text:
+                print(f"  3. Synthesizing speech...")
+                output_file = output_dir / f"turn_{turn}_response.wav"
+                await synthesize_speech(bot_text, output_file)
+                print(f"     Saved: {output_file}\n")
+            
+            # Small delay between turns
+            if turn < len(conversation):
+                await asyncio.sleep(0.5)
     
-    bot_text = " ".join([msg['text'] for msg in bot_responses if 'text' in msg])
+    print(f"{Colors.GREEN}✓ Check Balance flow completed{Colors.RESET}")
+    print(f"{Colors.GREEN}  Audio responses saved to: {output_dir}{Colors.RESET}\n")
+    return True
+
+
+async def test_transfer_money_flow():
+    """Test: Complete money transfer conversation flow."""
+    print(f"\n{Colors.BLUE}{'='*60}{Colors.RESET}")
+    print(f"{Colors.BLUE}Test: Transfer Money Flow{Colors.RESET}")
+    print(f"{Colors.BLUE}{'='*60}{Colors.RESET}\n")
     
-    if not bot_text:
-        print(f"   {Colors.YELLOW}Warning: Bot returned no text response{Colors.RESET}")
-        print(f"   This might mean the flow is waiting for user input")
-        print(f"   or the conversation hasn't started properly.\n")
-        return
+    sender_id = "voice-test-transfer"
+    audio_dir = Path("tests/audio")
+    output_dir = Path("tests/audio_responses/transfer_money")
+    output_dir.mkdir(parents=True, exist_ok=True)
     
-    print(f"   Bot said: '{bot_text}'\n")
+    # Define the conversation flow
+    conversation = [
+        ("transfer_money.wav", "I want to transfer money"),
+        ("checking.wav", "Checking"),
+        ("savings.wav", "Savings"),
+        ("five_hundred.wav", "Five hundred dollars"),
+        ("yes.wav", "Yes"),
+    ]
     
-    # 3. Convert bot response to speech
-    output_audio = Path("tests/audio_responses/bot_response.wav")
-    output_audio.parent.mkdir(exist_ok=True)
+    async with aiohttp.ClientSession() as session:
+        for turn, (audio_file, expected_text) in enumerate(conversation, 1):
+            print(f"{Colors.BLUE}Turn {turn}/{len(conversation)}{Colors.RESET}")
+            
+            # 1. Transcribe audio
+            audio_path = audio_dir / audio_file
+            print(f"  1. Transcribing: {audio_file}")
+            user_text = await transcribe_audio(audio_path)
+            print(f"     User said: '{user_text}'\n")
+            
+            # 2. Send to Rasa
+            print(f"  2. Sending to Rasa...")
+            response = await session.post(
+                "http://localhost:5005/webhooks/rest/webhook",
+                json={"sender": sender_id, "message": user_text}
+            )
+            
+            if response.status != 200:
+                print(f"     {Colors.RED}Error: {response.status}{Colors.RESET}\n")
+                return False
+            
+            bot_responses = await response.json()
+            bot_text = " ".join([msg['text'] for msg in bot_responses if 'text' in msg])
+            
+            if bot_text:
+                print(f"     Bot said: '{bot_text}'\n")
+                
+                # 3. Synthesize speech
+                print(f"  3. Synthesizing speech...")
+                output_file = output_dir / f"turn_{turn}_response.wav"
+                await synthesize_speech(bot_text, output_file)
+                print(f"     Saved: {output_file}\n")
+            else:
+                print(f"     {Colors.YELLOW}(Bot sent no text response){Colors.RESET}\n")
+            
+            # Small delay between turns
+            if turn < len(conversation):
+                await asyncio.sleep(0.5)
     
-    print(f"3. Synthesizing speech...")
-    await synthesize_speech(bot_text, output_audio)
-    print(f"   Saved to: {output_audio}\n")
+    print(f"{Colors.GREEN}✓ Transfer Money flow completed{Colors.RESET}")
+    print(f"{Colors.GREEN}  Audio responses saved to: {output_dir}{Colors.RESET}\n")
+    return True
+
+
+async def test_lost_card_flow():
+    """Test: Complete lost card conversation flow."""
+    print(f"\n{Colors.BLUE}{'='*60}{Colors.RESET}")
+    print(f"{Colors.BLUE}Test: Lost Card Flow{Colors.RESET}")
+    print(f"{Colors.BLUE}{'='*60}{Colors.RESET}\n")
     
-    print("✓ Full voice pipeline completed successfully!")
+    sender_id = "voice-test-lostcard"
+    audio_dir = Path("tests/audio")
+    output_dir = Path("tests/audio_responses/lost_card")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Define the conversation flow
+    conversation = [
+        ("lost_card.wav", "I lost my card"),
+        ("card_digits.wav", "4532"),
+    ]
+    
+    async with aiohttp.ClientSession() as session:
+        for turn, (audio_file, expected_text) in enumerate(conversation, 1):
+            print(f"{Colors.BLUE}Turn {turn}/{len(conversation)}{Colors.RESET}")
+            
+            # 1. Transcribe audio
+            audio_path = audio_dir / audio_file
+            print(f"  1. Transcribing: {audio_file}")
+            user_text = await transcribe_audio(audio_path)
+            print(f"     User said: '{user_text}'\n")
+            
+            # 2. Send to Rasa
+            print(f"  2. Sending to Rasa...")
+            response = await session.post(
+                "http://localhost:5005/webhooks/rest/webhook",
+                json={"sender": sender_id, "message": user_text}
+            )
+            
+            if response.status != 200:
+                print(f"     {Colors.RED}Error: {response.status}{Colors.RESET}\n")
+                return False
+            
+            bot_responses = await response.json()
+            bot_text = " ".join([msg['text'] for msg in bot_responses if 'text' in msg])
+            print(f"     Bot said: '{bot_text}'\n")
+            
+            # 3. Synthesize speech
+            if bot_text:
+                print(f"  3. Synthesizing speech...")
+                output_file = output_dir / f"turn_{turn}_response.wav"
+                await synthesize_speech(bot_text, output_file)
+                print(f"     Saved: {output_file}\n")
+            
+            # Small delay between turns
+            if turn < len(conversation):
+                await asyncio.sleep(0.5)
+    
+    print(f"{Colors.GREEN}✓ Lost Card flow completed{Colors.RESET}")
+    print(f"{Colors.GREEN}  Audio responses saved to: {output_dir}{Colors.RESET}\n")
+    return True
+
+
+async def run_all_tests():
+    """Run all conversation flow tests."""
+    print(f"\n{Colors.BLUE}{'='*60}{Colors.RESET}")
+    print(f"{Colors.BLUE}Voice Pipeline Testing - Complete Conversations{Colors.RESET}")
+    print(f"{Colors.BLUE}{'='*60}{Colors.RESET}\n")
+    
+    # Check if test audio exists
+    audio_dir = Path("tests/audio")
+    if not audio_dir.exists() or not list(audio_dir.glob("*.wav")):
+        print(f"{Colors.RED}✗ Test audio files not found{Colors.RESET}")
+        print(f"\nPlease generate test audio first:")
+        print(f"  {Colors.GREEN}make generate-test-audio{Colors.RESET}\n")
+        return 1
+    
+    print(f"Test audio directory: {audio_dir}")
+    print(f"Available files: {len(list(audio_dir.glob('*.wav')))} WAV files\n")
+    
+    # Run all test flows
+    results = []
+    
+    try:
+        results.append(await test_check_balance_flow())
+        results.append(await test_transfer_money_flow())
+        results.append(await test_lost_card_flow())
+    except Exception as e:
+        print(f"\n{Colors.RED}✗ Test failed with error:{Colors.RESET}")
+        print(f"  {str(e)}\n")
+        return 1
+    
+    # Summary
+    print(f"\n{Colors.BLUE}{'='*60}{Colors.RESET}")
+    print(f"{Colors.BLUE}Test Summary{Colors.RESET}")
+    print(f"{Colors.BLUE}{'='*60}{Colors.RESET}\n")
+    
+    passed = sum(1 for r in results if r)
+    total = len(results)
+    
+    print(f"Total flows tested: {total}")
+    print(f"{Colors.GREEN}Passed: {passed}{Colors.RESET}")
+    
+    if passed < total:
+        print(f"{Colors.RED}Failed: {total - passed}{Colors.RESET}")
+    
+    print(f"\n{Colors.GREEN}All conversation audio saved to: tests/audio_responses/{Colors.RESET}")
+    print(f"\nYou can now:")
+    print(f"  • Listen to bot responses in tests/audio_responses/")
+    print(f"  • Verify conversation quality manually")
+    print(f"  • Use these for training or documentation\n")
+    
+    return 0 if passed == total else 1
 
 
 if __name__ == "__main__":
-    asyncio.run(example_test())
+    exit_code = asyncio.run(run_all_tests())

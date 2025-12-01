@@ -1,3 +1,5 @@
+# actions.py - Custom Actions for Voice Banking Assistant
+
 from typing import Any, Text, Dict, List
 from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher
@@ -17,7 +19,7 @@ class ActionGetAccountBalance(Action):
         """Get account balance from mock database."""
         account_type = tracker.get_slot("account_type")
         
-        # Normalize account type
+        # Normalize account type (handles "check", "checking", "sav", "savings")
         if account_type:
             account_type = account_type.lower()
             if "check" in account_type:
@@ -71,8 +73,13 @@ class ActionProcessTransfer(Action):
         to_account = tracker.get_slot("transfer_to_account")
         amount = tracker.get_slot("transfer_amount")
         
-        # In production, this would call banking API
-        # For demo, we just confirm the transfer happened
+        # In production, this would:
+        # 1. Validate sufficient funds
+        # 2. Call banking API
+        # 3. Handle errors
+        
+        # For demo, we just log and confirm
+        print(f"Processing transfer: ${amount} from {from_account} to {to_account}")
         
         return []
 
@@ -90,14 +97,29 @@ class ActionBlockCard(Action):
         """Block a lost or stolen card."""
         card_last_four = tracker.get_slot("card_last_four")
         
-        # Mock card blocking - in production, call banking API
-        # Validate card last four digits
-        if card_last_four and len(card_last_four) == 4 and card_last_four.isdigit():
-            card_blocked = True
-        else:
-            card_blocked = False
+        if not card_last_four:
+            return [SlotSet("card_blocked", False)]
         
-        return [SlotSet("card_blocked", card_blocked)]
+        # VOICE FIX: Clean the card digits - remove spaces and non-digits
+        # This handles "4 532" or "4 5 3 2" from voice transcription
+        cleaned_digits = ''.join(c for c in str(card_last_four) if c.isdigit())
+        
+        # Validate we have exactly 4 digits
+        if len(cleaned_digits) != 4:
+            print(f"Invalid card digits: '{card_last_four}' (cleaned: '{cleaned_digits}')")
+            return [
+                SlotSet("card_blocked", False),
+                SlotSet("card_last_four", None)  # Reset to ask again
+            ]
+        
+        # Mock card blocking - in production, call banking API
+        print(f"Blocking card ending in {cleaned_digits}")
+        
+        # Update the slot with cleaned digits and mark as blocked
+        return [
+            SlotSet("card_blocked", True),
+            SlotSet("card_last_four", cleaned_digits)
+        ]
 
 
 class ActionGetTransactions(Action):
