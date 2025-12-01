@@ -121,7 +121,7 @@ make test-voice-production
 **What it does:**
 1. **Transcribes** pre-generated audio files using Deepgram ASR
 2. **Sends** transcribed text to Rasa REST API
-3. **Receives** bot responses from conversation flows
+3. **Receives** agent responses from conversation flows
 4. **Synthesizes** audio responses using Rime TTS
 5. **Saves** all audio outputs for manual verification
 6. **Validates** complete multi-turn conversations
@@ -350,7 +350,7 @@ voice-assistant/
 │   │   ├── check_balance.wav
 │   │   ├── transfer_money.wav
 │   │   └── ...
-│   └── audio_responses/            # Generated bot responses (after testing)
+│   └── audio_responses/            # Generated agent responses (after testing)
 ├── credentials.yml                 # Speech service configuration
 ├── endpoints.yml                   # Action server + timeout config
 ├── config.yml                      # Rasa model configuration
