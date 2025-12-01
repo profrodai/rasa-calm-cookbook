@@ -335,12 +335,16 @@ make run-actions  # Terminal 2
 ```
 voice-assistant/
 ├── data/
-│   ├── flows-voice-fixed.yml       # Voice-optimized flows with slot resets
-│   ├── domain.yml                  # Slots, responses, actions
-│   └── nlu.yml                     # Training examples
+│   └── flows.yml       # Voice-optimized flows with slot resets
+├── conversations/
+│   └── sample_conversations.md           # Training examples
 ├── actions/
-│   └── actions-merged.py           # Banking actions with voice digit cleaning
+│   └── actions.py           # Banking actions with voice digit cleaning
 ├── tests/
+│   ├── e2e_test_cases.yml
+│   ├── generate_test_audio.py
+│   ├── test_voice_automated.py
+│   ├── test_voice_full.pipeline.py
 │   ├── test_voice_production.py    # Automated voice testing
 │   ├── audio/                      # Pre-generated test inputs
 │   │   ├── check_balance.wav
@@ -351,6 +355,7 @@ voice-assistant/
 ├── endpoints.yml                   # Action server + timeout config
 ├── config.yml                      # Rasa model configuration
 ├── Makefile                        # Development commands
+├── domain.yml                  # Slots, responses, actions
 └── README.md                       # This file
 ```
 
@@ -380,7 +385,7 @@ voice-assistant/
 
 ### Custom Actions
 
-Located in `actions/actions-merged.py`:
+Located in `actions/actions.py`:
 
 ```python
 # action_get_account_balance
@@ -517,9 +522,9 @@ make inspect-voice
 
 ### Adding New Flows
 
-1. **Define flow** in `data/flows-voice-fixed.yml`
-2. **Add responses** in `data/domain.yml`
-3. **Create action** (if needed) in `actions/actions-merged.py`
+1. **Define flow** in `data/flows.yml`
+2. **Add responses** in `domain.yml`
+3. **Create action** (if needed) in `actions/actions.py`
 4. **Add test audio** in `tests/audio/`
 5. **Update test script** in `tests/test_voice_production.py`
 6. **Train and test:**
@@ -641,12 +646,10 @@ make run
 ## Cost Optimization
 
 **Deepgram ASR:**
-- ~$0.0043 per minute of audio
 - Pre-process audio to reduce dead time
 - Use appropriate model (nova-2 is fast + accurate)
 
 **Rime TTS:**
-- ~$0.16 per 1000 characters
 - Cache common responses
 - Minimize response length
 
@@ -692,7 +695,7 @@ For issues specific to this recipe:
 2. Review logs in Rasa server output
 3. Verify action server is running
 4. Test with `make shell` first (text mode)
-5. Post in Rasa Community Forum with logs
+5. Post in the Agent Engineering Community with logs
 
 ## License
 
