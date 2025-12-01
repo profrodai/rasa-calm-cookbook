@@ -110,34 +110,24 @@ def text_to_audio_simple(text: str, output_file: Path) -> None:
 async def send_text_to_rasa(text: str, sender_id: str) -> List[dict]:
     """Send text message to Rasa and get response."""
     
-    url = f"{RASA_URL}/webhooks/rest/webhook"
-    
-    payload = {
-        "sender": sender_id,
-        "message": text
-    }
-    
     async with aiohttp.ClientSession() as session:
+        # Try REST webhook first (requires 'rest:' in credentials.yml)
+        url = f"{RASA_URL}/webhooks/rest/webhook"
+        payload = {"sender": sender_id, "message": text}
+        
         try:
             async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as response:
                 if response.status == 200:
                     return await response.json()
+                elif response.status == 404:
+                    # REST channel not configured
+                    raise Exception(
+                        "REST channel not found. Please add 'rest:' to your credentials.yml file.\n"
+                        "See: FIX_REST_WEBHOOK.md"
+                    )
                 else:
-                    # Try conversations API as fallback
-                    url2 = f"{RASA_URL}/conversations/{sender_id}/execute"
-                    payload2 = {
-                        "text": text,
-                        "sender": "user"
-                    }
-                    async with session.post(url2, json=payload2) as response2:
-                        if response2.status == 200:
-                            data = await response2.json()
-                            # Extract messages from tracker
-                            if 'messages' in data:
-                                return data['messages']
-                        
-                    text = await response.text()
-                    raise Exception(f"Rasa returned status {response.status}: {text}")
+                    text_resp = await response.text()
+                    raise Exception(f"Rasa returned status {response.status}: {text_resp}")
         except aiohttp.ClientError as e:
             raise Exception(f"Failed to connect to Rasa: {e}")
 

@@ -216,19 +216,23 @@ async def example_test():
     print(f"2. Sending to Rasa...")
     async with aiohttp.ClientSession() as session:
         response = await session.post(
-            f"http://localhost:5005/conversations/{sender_id}/execute",
-            json={"text": user_text, "sender": "user"}
+            "http://localhost:5005/webhooks/rest/webhook",
+            json={"sender": sender_id, "message": user_text}
         )
-        data = await response.json()
         
-        # Extract bot messages from tracker events
-        bot_responses = []
-        if 'tracker' in data and 'events' in data['tracker']:
-            for event in data['tracker']['events']:
-                if event.get('event') == 'bot' and 'text' in event:
-                    bot_responses.append({'text': event['text']})
-        elif 'messages' in data:
-            bot_responses = data['messages']
+        if response.status == 200:
+            bot_responses = await response.json()
+        elif response.status == 404:
+            print(f"   {Colors.RED}Error: REST channel not configured{Colors.RESET}")
+            print(f"\n   {Colors.YELLOW}Solution:{Colors.RESET}")
+            print(f"   1. Add this to data/credentials.yml:")
+            print(f"      {Colors.GREEN}rest:{Colors.RESET}")
+            print(f"   2. Restart Rasa: {Colors.GREEN}make run{Colors.RESET}\n")
+            return
+        else:
+            error_text = await response.text()
+            print(f"   {Colors.RED}Error: {response.status} - {error_text}{Colors.RESET}\n")
+            return
     
     bot_text = " ".join([msg['text'] for msg in bot_responses if 'text' in msg])
     
