@@ -37,6 +37,13 @@ test = [
     "pytest-asyncio>=0.21.0",
 ]
 
+# Automated voice testing
+voice-automation = [
+    "gtts>=2.3.0",      # Generate test audio files
+    "pydub>=0.25.0",    # Audio processing (requires ffmpeg)
+    "aiohttp>=3.8.0",   # HTTP client for tests
+]
+
 [tool.ruff]
 line-length = 88
 target-version = "py310"
@@ -44,6 +51,7 @@ exclude = [
     ".venv",
     "models",
     "logs",
+    "tests/audio",  # Exclude generated audio files
 ]
 
 [tool.ruff.lint]
@@ -56,10 +64,21 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 "actions/*.py" = ["ANN"]  # Disable annotation warnings in actions
+"tests/generate_test_audio.py" = ["T201"]  # Allow print in test generator
+"tests/test_voice_automated.py" = ["T201"]  # Allow print in test runner
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 markers = [
     "voice: marks tests as voice-specific tests",
     "integration: marks tests as integration tests",
+    "automated: marks tests as automated voice tests",
+]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
 ]

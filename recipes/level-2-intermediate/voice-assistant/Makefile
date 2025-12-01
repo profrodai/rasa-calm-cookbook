@@ -46,10 +46,13 @@ help: ## Show this help message
 	@echo '  Run:          ${GREEN}make run${RESET}             - Start server'
 	@echo '  Actions:      ${GREEN}make run-actions${RESET}     - Start action server'
 	@echo ''
+	# Add to help section (around line 50-55):
 	@echo '${YELLOW}Testing:${RESET}'
-	@echo '  Test E2E:     ${GREEN}make test-e2e${RESET}        - Run end-to-end tests'
-	@echo '  Test Voice:   ${GREEN}make test-voice${RESET}      - Run voice-specific tests'
-	@echo '  Validate:     ${GREEN}make validate${RESET}        - Validate configuration'
+	@echo '  Test E2E:     ${GREEN}make test-e2e${RESET}            - Run end-to-end tests'
+	@echo '  Test Voice:   ${GREEN}make test-voice${RESET}          - Run voice-specific tests'
+	@echo '  Voice Auto:   ${GREEN}make test-voice-automated${RESET} - Automated voice tests'
+	@echo '  Audio Gen:    ${GREEN}make generate-test-audio${RESET} - Generate test audio files'
+	@echo '  Validate:     ${GREEN}make validate${RESET}            - Validate configuration'
 	@echo ''
 	@echo '${YELLOW}Configuration:${RESET}'
 	@echo '  Check:        ${GREEN}make status${RESET}          - Show environment status'
@@ -427,5 +430,73 @@ quick-start: ## Quick start: setup, config, and train
 	@echo "${YELLOW}Next steps:${RESET}"
 	@echo "  1. ${GREEN}make inspect${RESET} - Test your assistant"
 	@echo "  2. ${GREEN}make test-e2e${RESET} - Run tests"
+
+.PHONY: generate-test-audio
+generate-test-audio: ## Generate test audio files for automated testing
+	@echo "${BLUE}Generating test audio files...${RESET}"
+	@if [ ! -f "tests/generate_test_audio.py" ]; then \
+	  echo "${RED}Error: tests/generate_test_audio.py not found${RESET}"; \
+	  echo "Please copy the script to tests/ directory"; \
+	  exit 1; \
+	fi
+	@# Check dependencies
+	@if ! $(PYTHON) -c "import gtts, pydub" 2>/dev/null; then \
+	  echo "${YELLOW}Installing voice automation dependencies...${RESET}"; \
+	  $(UV) pip install gtts pydub --python $(PYTHON); \
+	fi
+	@# Check ffmpeg
+	@if ! command -v ffmpeg >/dev/null 2>&1; then \
+	  echo "${RED}Error: ffmpeg not found${RESET}"; \
+	  echo "Please install ffmpeg:"; \
+	  echo "  macOS: ${GREEN}brew install ffmpeg${RESET}"; \
+	  echo "  Ubuntu: ${GREEN}sudo apt-get install ffmpeg${RESET}"; \
+	  exit 1; \
+	fi
+	@$(PYTHON) tests/generate_test_audio.py
+	@echo "${GREEN}✓ Test audio files generated${RESET}"
+
+.PHONY: test-voice-automated
+test-voice-automated: check-env ## Run automated voice tests
+	@echo "${BLUE}Running automated voice tests...${RESET}"
+	@# Check if test script exists
+	@if [ ! -f "tests/test_voice_automated.py" ]; then \
+	  echo "${RED}Error: tests/test_voice_automated.py not found${RESET}"; \
+	  echo "Please copy the script to tests/ directory"; \
+	  exit 1; \
+	fi
+	@# Generate audio files if they don't exist
+	@if [ ! -d "tests/audio" ] || [ -z "$$(ls -A tests/audio 2>/dev/null)" ]; then \
+	  echo "${YELLOW}Test audio files not found. Generating...${RESET}"; \
+	  make generate-test-audio; \
+	fi
+	@# Check dependencies
+	@if ! $(PYTHON) -c "import aiohttp" 2>/dev/null; then \
+	  echo "${YELLOW}Installing aiohttp...${RESET}"; \
+	  $(UV) pip install aiohttp --python $(PYTHON); \
+	fi
+	@# Check if Rasa is running
+	@echo "${BLUE}Checking if Rasa voice server is running...${RESET}"
+	@if ! curl -s http://localhost:5005/ > /dev/null 2>&1; then \
+	  echo "${RED}Error: Rasa server is not running${RESET}"; \
+	  echo ""; \
+	  echo "${YELLOW}Please start Rasa in another terminal:${RESET}"; \
+	  echo "  ${GREEN}make inspect-voice${RESET}"; \
+	  echo ""; \
+	  echo "Then run this command again."; \
+	  exit 1; \
+	fi
+	@echo "${GREEN}✓ Rasa server is running${RESET}"
+	@# Run automated tests
+	@$(PYTHON) tests/test_voice_automated.py
+
+.PHONY: install-voice-test-deps
+install-voice-test-deps: ## Install dependencies for automated voice testing
+	@echo "${BLUE}Installing voice testing dependencies...${RESET}"
+	@$(UV) pip install gtts pydub aiohttp --python $(PYTHON)
+	@echo "${GREEN}✓ Voice testing dependencies installed${RESET}"
+	@echo ""
+	@echo "${YELLOW}Note: You also need ffmpeg installed:${RESET}"
+	@echo "  macOS: ${GREEN}brew install ffmpeg${RESET}"
+	@echo "  Ubuntu: ${GREEN}sudo apt-get install ffmpeg${RESET}"
 
 .DEFAULT_GOAL := help
