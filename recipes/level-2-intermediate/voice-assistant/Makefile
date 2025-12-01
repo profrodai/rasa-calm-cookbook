@@ -499,4 +499,19 @@ install-voice-test-deps: ## Install dependencies for automated voice testing
 	@echo "  macOS: ${GREEN}brew install ffmpeg${RESET}"
 	@echo "  Ubuntu: ${GREEN}sudo apt-get install ffmpeg${RESET}"
 
+.PHONY: test-voice-pipeline
+test-voice-pipeline: check-env ## Test full voice pipeline (mock ASR/TTS)
+	@echo "${BLUE}Running voice pipeline tests...${RESET}"
+	@$(PYTHON) tests/test_voice_full_pipeline.py
+
+.PHONY: test-voice-production
+test-voice-production: check-env ## Test with real ASR/TTS services
+	@echo "${BLUE}Running production voice tests...${RESET}"
+	@if [ -z "$$DEEPGRAM_API_KEY" ] && [ -z "$$AZURE_SPEECH_API_KEY" ]; then \
+	  echo "${RED}Error: No ASR/TTS service configured${RESET}"; \
+	  echo "Set DEEPGRAM_API_KEY or AZURE_SPEECH_API_KEY"; \
+	  exit 1; \
+	fi
+	@$(PYTHON) tests/test_voice_production.py
+
 .DEFAULT_GOAL := help

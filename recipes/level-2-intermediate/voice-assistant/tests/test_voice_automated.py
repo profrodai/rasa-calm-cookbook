@@ -71,6 +71,11 @@ async def send_message_to_rasa(message: str, sender_id: str) -> Dict:
             async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as response:
                 if response.status == 200:
                     data = await response.json()
+                    
+                    # Debug: Print actual response
+                    print(f"{Colors.YELLOW}DEBUG: Response type: {type(data)}{Colors.RESET}")
+                    print(f"{Colors.YELLOW}DEBUG: Response: {data}{Colors.RESET}")
+                    
                     # The conversations API returns messages in a different format
                     # Extract bot responses
                     if isinstance(data, dict) and 'messages' in data:
