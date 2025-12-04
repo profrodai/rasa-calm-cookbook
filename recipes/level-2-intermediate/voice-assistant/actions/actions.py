@@ -1,4 +1,4 @@
-# actions.py - Custom Actions for Voice Banking Assistant
+# recipes/level-2-intermediate/voice-assistant/actions/actions.py
 
 from typing import Any, Text, Dict, List
 from rasa_sdk import Action, Tracker

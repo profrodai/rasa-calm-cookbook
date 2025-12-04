@@ -1,3 +1,4 @@
+# recipes/level-1-basic/basic-tutorial/tests/e2e_test_cases.yml
 test_cases:
   - test_case: successful money transfer
     steps:

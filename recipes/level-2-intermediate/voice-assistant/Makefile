@@ -514,4 +514,23 @@ test-voice-production: check-env ## Test with real ASR/TTS services
 	fi
 	@$(PYTHON) tests/test_voice_production.py
 
+.PHONY: pre-commit
+pre-commit: format lint test ## Run all checks before committing
+	@echo "${GREEN}✓ All checks passed${RESET}"
+
+.PHONY: structure
+structure: ## Show project structure
+	@echo "${YELLOW}Current Project Structure:${RESET}"
+	@echo "${BLUE}"
+	@if command -v tree > /dev/null; then \
+		tree -a -I '.git|.venv|__pycache__|*.pyc|*.pyo|*.pyd|.pytest_cache|.ruff_cache|.coverage|htmlcov'; \
+	else \
+		find . -not -path '*/\.*' -not -path '*.pyc' -not -path '*/__pycache__/*' \
+			-not -path './.venv/*' -not -path './build/*' -not -path './dist/*' \
+			-not -path './*.egg-info/*' \
+			| sort | \
+			sed -e "s/[^-][^\/]*\// │   /g" -e "s/├── /│── /" -e "s/└── /└── /"; \
+	fi
+	@echo "${RESET}"
+
 .DEFAULT_GOAL := help

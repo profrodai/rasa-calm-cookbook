@@ -1,2 +1,3 @@
+# recipes/level-1-basic/basic-tutorial/endpoints.yml
 action_endpoint:
   url: "http://localhost:5055/webhook"

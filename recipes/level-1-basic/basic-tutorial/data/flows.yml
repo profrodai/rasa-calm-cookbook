@@ -1,3 +1,4 @@
+# recipes/level-1-basic/basic-tutorial/data/flows.yml
 flows:
   transfer_money:
     description: Help users send money to friends and family.

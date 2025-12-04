@@ -1,4 +1,4 @@
-# flows.yml - Voice Banking Assistant Flows (Fixed for Voice Testing)
+# recipes/level-2-intermediate/voice-assistant/data/flows.yml
 
 flows:
   # Welcome and Help

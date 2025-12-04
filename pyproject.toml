@@ -1,4 +1,4 @@
-# rasa-calm-cookbook/pyproject.toml (root project)
+# pyproject.toml
 # This is a cookbook/tutorial repository, not a library
 # Each recipe is self-contained and should be run independently
 

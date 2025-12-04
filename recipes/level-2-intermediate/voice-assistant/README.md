@@ -333,30 +333,68 @@ make run-actions  # Terminal 2
 ### Core Files
 
 ```
-voice-assistant/
-├── data/
-│   └── flows.yml       # Voice-optimized flows with slot resets
-├── conversations/
-│   └── sample_conversations.md           # Training examples
-├── actions/
-│   └── actions.py           # Banking actions with voice digit cleaning
-├── tests/
-│   ├── e2e_test_cases.yml
-│   ├── generate_test_audio.py
-│   ├── test_voice_automated.py
-│   ├── test_voice_full.pipeline.py
-│   ├── test_voice_production.py    # Automated voice testing
-│   ├── audio/                      # Pre-generated test inputs
-│   │   ├── check_balance.wav
-│   │   ├── transfer_money.wav
-│   │   └── ...
-│   └── audio_responses/            # Generated agent responses (after testing)
-├── credentials.yml                 # Speech service configuration
-├── endpoints.yml                   # Action server + timeout config
-├── config.yml                      # Rasa model configuration
-├── Makefile                        # Development commands
-├── domain.yml                  # Slots, responses, actions
-└── README.md                       # This file
+❯ make structure
+Current Project Structure:
+
+.
+├── .env
+├── .env.example
+├── actions
+│   └── actions.py
+├── config-azure.yml
+├── config-local.yml
+├── config-openai.yml
+├── config.yml
+├── conversations
+│   └── sample_conversations.md
+├── credentials.yml
+├── data
+│   └── flows.yml
+├── domain.yml
+├── endpoints.yml
+├── Makefile
+├── models
+│   ├── 20251130-182202-kinetic-parallel.tar.gz
+│   ├── 20251130-235302-nondeterministic-body.tar.gz
+│   └── 20251201-055026-grouchy-sum.tar.gz
+├── pyproject.toml
+├── README.md
+├── recordings
+└── tests
+    ├── audio
+    │   ├── cancel.wav
+    │   ├── card_digits.wav
+    │   ├── check_balance.wav
+    │   ├── checking.wav
+    │   ├── five_hundred.wav
+    │   ├── goodbye.wav
+    │   ├── help.wav
+    │   ├── lost_card.wav
+    │   ├── no.wav
+    │   ├── savings.wav
+    │   ├── transfer_money.wav
+    │   └── yes.wav
+    ├── audio_responses
+    │   ├── .DS_Store
+    │   ├── check_balance
+    │   │   ├── turn_1_response.wav
+    │   │   └── turn_2_response.wav
+    │   ├── lost_card
+    │   │   ├── turn_1_response.wav
+    │   │   └── turn_2_response.wav
+    │   └── transfer_money
+    │       ├── turn_1_response.wav
+    │       ├── turn_2_response.wav
+    │       ├── turn_3_response.wav
+    │       ├── turn_4_response.wav
+    │       └── turn_5_response.wav
+    ├── e2e_test_cases.yml
+    ├── generate_test_audio.py
+    ├── test_voice_automated.py
+    ├── test_voice_full_pipeline.py
+    └── test_voice_production.py
+
+22 directories, 59 files
 ```
 
 ### Conversation Flows

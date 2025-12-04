@@ -1,3 +1,4 @@
+# recipes/level-1-basic/basic-tutorial/domain.yml
 version: "3.1"
 
 session_config:
