@@ -1,1 +1,110 @@
-# recipes/level-2-intermediate/meeting-intelligence-agent/pyproject.toml
+# recipes/level-3-advanced/meeting-intelligence-agent/pyproject.toml
+[project]
+name = "meeting-intelligence-agent"
+version = "0.1.0"
+description = "Voice-enabled meeting intelligence agent with speaker diarization, transcription, and Q&A"
+requires-python = ">=3.11,<3.12"
+
+# Note: This is a Rasa project. Install dependencies via:
+#   make setup-recipe (from this directory)
+#   make install-advanced (from repository root)
+
+dependencies = [
+    "rasa-pro>=3.8.0",
+    "rasa-sdk>=3.8.0",
+    "openai>=1.0.0",
+    
+    # Meeting Processing
+    "pyannote.audio>=3.1.0",  # Speaker diarization
+    "faster-whisper>=0.10.0",  # ASR (optimized for M4 Mac)
+    "chromadb>=0.4.0",  # Vector database
+    "sentence-transformers>=2.2.0",  # Embeddings
+    
+    # NeuTTS Air (voice synthesis)
+    "neutts-air>=0.1.0",  # Custom TTS
+    "phonemizer>=3.2.0",  # Required by NeuTTS Air
+    
+    # Audio Processing
+    "pydub>=0.25.0",  # Audio manipulation
+    "librosa>=0.10.0",  # Audio analysis (optional)
+    
+    # Voice Channel
+    "websockets>=10.0",
+    "aiohttp>=3.8.0",
+    
+    # Data Processing
+    "numpy>=1.24.0",
+    "torch>=2.0.0",  # PyTorch for models
+    "transformers>=4.30.0",  # Hugging Face transformers
+]
+
+[project.optional-dependencies]
+# Full voice support (requires system libraries)
+voice-full = [
+    "pyaudio>=0.2.11",  # Requires: brew install portaudio (macOS)
+]
+
+# Testing
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+# Voice automation testing
+voice-automation = [
+    "gtts>=2.3.0",  # Generate test audio files
+    "pydub>=0.25.0",  # Audio processing (requires ffmpeg)
+]
+
+# GPU acceleration (optional)
+gpu = [
+    "torch>=2.0.0",  # Will use Metal/MPS on M4 Mac
+]
+
+# Development
+dev = [
+    "ruff>=0.2.0",
+    "black>=23.0.0",
+    "mypy>=1.8.0",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+exclude = [
+    ".venv",
+    "models",
+    "logs",
+    "tests/audio",
+    "recordings",
+    "meetings",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+]
+
+[tool.ruff.lint.per-file-ignores]
+"actions/*.py" = ["ANN"]  # Disable annotation warnings in actions
+"meeting_processing/*.py" = ["ANN"]
+"tests/*.py" = ["T201"]  # Allow print in tests
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "voice: marks tests as voice-specific tests",
+    "integration: marks tests as integration tests",
+    "slow: marks tests as slow tests (diarization, transcription)",
+]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]

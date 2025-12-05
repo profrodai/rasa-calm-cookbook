@@ -1,1 +1,75 @@
-# recipes/level-2-intermediate/meeting-intelligence-agent/domain.yml
+# recipes/level-3-advanced/meeting-intelligence-agent/domain.yml
+version: "3.1"
+
+session_config:
+  session_expiration_time: 60
+  carry_over_slots_to_new_session: true
+
+intents:
+  - ask_meeting_question
+  - greet
+  - goodbye
+  - help
+
+slots:
+  # Current meeting being queried
+  meeting_id:
+    type: text
+    influence_conversation: false
+    initial_value: "sample_earnings_call"
+    mappings:
+      - type: custom
+
+  # Speaker role filter (e.g., "CEO", "CFO")
+  speaker_role:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: from_llm
+
+  # Topic/subject of question
+  question_topic:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: from_llm
+
+  # Last answer provided
+  last_answer:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
+
+responses:
+  utter_greet:
+    - text: "Hello! I'm your meeting intelligence assistant. I can answer questions about processed meetings. What would you like to know?"
+
+  utter_goodbye:
+    - text: "Thank you for using the meeting intelligence assistant. Have a great day!"
+
+  utter_help:
+    - text: |
+        I can help you find information from meeting transcripts. Try asking:
+        
+        • "What did the CEO say about revenue?"
+        • "Summarize the CFO's comments on margins"
+        • "Which analyst asked about guidance?"
+        • "Tell me about the AI investments discussion"
+        
+        I'll search the meeting and provide relevant excerpts with speaker attribution.
+
+  utter_no_meeting:
+    - text: "I don't have access to that meeting. Please make sure it has been processed first."
+
+  utter_no_results:
+    - text: "I couldn't find any relevant information about that in the meeting. Try rephrasing your question or asking about a different topic."
+
+  utter_processing_error:
+    - text: "I encountered an error while searching the meeting. Please try again or rephrase your question."
+
+  utter_default:
+    - text: "I didn't quite understand that. You can ask me questions about the meeting, like 'What did the CEO say about revenue?'"
+
+actions:
+  - action_answer_meeting_question

@@ -1,1 +1,46 @@
-# recipes/level-2-intermediate/meeting-intelligence-agent/data/flows.yml
+# recipes/level-3-advanced/meeting-intelligence-agent/data/flows.yml
+
+flows:
+  # Welcome Flow
+  greet:
+    description: Greet the user and explain capabilities
+    steps:
+      - action: utter_greet
+
+  # Help Flow
+  help:
+    description: Explain what the assistant can do
+    steps:
+      - action: utter_help
+
+  # Goodbye Flow
+  goodbye:
+    description: End the conversation politely
+    steps:
+      - action: utter_goodbye
+
+  # Main Meeting Q&A Flow
+  meeting_qa:
+    description: Answer questions about meeting content using semantic search
+    steps:
+      - id: answer_question
+        action: action_answer_meeting_question
+        next: ask_followup
+
+      - id: ask_followup
+        action: utter_can_help_more
+
+      - id: wait_for_input
+        # Wait for next question or goodbye
+        next: END
+
+# ==============================================================================
+# Additional Responses
+# ==============================================================================
+# These are used by the flows above but defined in domain.yml
+# - utter_greet
+# - utter_help
+# - utter_goodbye
+# - utter_no_meeting
+# - utter_no_results
+# - utter_processing_error
