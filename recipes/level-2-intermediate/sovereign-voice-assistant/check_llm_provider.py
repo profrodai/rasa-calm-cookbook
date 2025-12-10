@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# recipes/level-2-intermediate/sovereign-voice-assistant/check_llm_provider.py
 """
 Check which LLM provider is configured and verify connectivity.
 This script helps visualize which provider (OpenAI vs Ollama) is active.
