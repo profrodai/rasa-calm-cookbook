@@ -96,7 +96,7 @@ check-speech-keys: ## Check if speech API keys are configured
 	  echo "${GREEN}✓ RIME_API_KEY is set${RESET}"; \
 	fi
 
-PHONY: setup-env
+.PHONY: setup-env
 setup-env: ## Create .env file from template
 	@if [ ! -f "$(ENV_FILE)" ]; then \
 	  if [ -f "$(ENV_EXAMPLE)" ]; then \
@@ -1041,5 +1041,44 @@ uninstall-neutts: check-venv ## Uninstall NeuTTS Air
 	rm -rf "$$SITE_PACKAGES/neuttsair"; \
 	echo "${GREEN}✓ neuttsair module removed${RESET}"
 	@echo "${YELLOW}Note: Core dependencies not removed (may be used elsewhere)${RESET}"
+
+# Add this target to your Makefile for testing local fork
+
+.PHONY: install-neutts-local
+install-neutts-local: check-venv ## Install NeuTTS from local fork (for testing PR)
+	@echo "${BLUE}Installing NeuTTS from local fork...${RESET}"
+	@echo ""
+	@FORK_PATH="$(HOME)/repos/profrodai/profrodai/neutts-air"; \
+	if [ ! -d "$$FORK_PATH" ]; then \
+		echo "${RED}✗ Fork not found at $$FORK_PATH${RESET}"; \
+		exit 1; \
+	fi; \
+	echo "${YELLOW}Using fork at: $$FORK_PATH${RESET}"; \
+	echo ""; \
+	SITE_PACKAGES=$$($(PYTHON) -c "import site; print(site.getsitepackages()[0])"); \
+	NEUTTS_DIR="$$SITE_PACKAGES/neuttsair"; \
+	echo "Creating neuttsair directory..."; \
+	mkdir -p "$$NEUTTS_DIR"; \
+	echo "Copying files from fork..."; \
+	cp "$$FORK_PATH/neuttsair/__init__.py" "$$NEUTTS_DIR/"; \
+	cp "$$FORK_PATH/neuttsair/neutts.py" "$$NEUTTS_DIR/"; \
+	if [ -f "$$NEUTTS_DIR/neutts.py" ]; then \
+		echo "${GREEN}✓ Local fork installed${RESET}"; \
+	else \
+		echo "${RED}✗ Installation failed${RESET}"; \
+		exit 1; \
+	fi
+	@echo ""
+	@echo "${YELLOW}Verifying changes...${RESET}"
+	@$(PYTHON) -c 'import neuttsair, inspect; \
+source = inspect.getsource(neuttsair.NeuTTSAir.__init__); \
+has_try = "try:" in source and "import perth" in source; \
+has_espeak = "_configure_espeak_library" in open(neuttsair.__file__.replace("__init__.py", "neutts.py")).read(); \
+print("  ✓ Perth try/except found" if has_try else "  ✗ Perth try/except missing"); \
+print("  ✓ espeak auto-detection found" if has_espeak else "  ✗ espeak auto-detection missing"); \
+print("  ✓ Your PR changes are active!" if (has_try and has_espeak) else "  ⚠ Some changes missing")'
+	@echo ""
+	@echo "${GREEN}✓ Ready to test!${RESET}"
+	@echo "  Run: ${GREEN}make test-neutts-quick${RESET}"
 
 .DEFAULT_GOAL := help
