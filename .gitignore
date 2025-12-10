@@ -224,3 +224,6 @@ __marimo__/
 # Ignore any models directory everywhere
 **/models/
 flat.txt
+
+recipes/level-2-intermediate/sovereign-voice-assistant/.neutts_cache/
+

@@ -2,7 +2,7 @@
 [project]
 name = "voice-assistant"
 version = "0.1.0"
-description = "Voice-enabled banking assistant with Rime TTS and Deepgram ASR"
+description = "Voice-enabled banking assistant with local NeuTTS and Deepgram ASR"
 requires-python = ">=3.10,<3.12"
 
 # Note: This is a Rasa project, not a Python package.
@@ -31,13 +31,31 @@ azure = [
 voice-full = [
     "pyaudio>=0.2.11",  # Requires: brew install portaudio (macOS)
     "librosa==0.11.0",
-    "neucodec==0.0.4",
-    "numpy==2.2.6",
-    "phonemizer>=3.3.0",
     "soundfile>=0.13.1",
     "torch>=2.8.0",
     "transformers>=4.56.1",
-    "resemble-perth>=1.0.1",
+    "numpy==2.2.6",
+]
+
+# Local TTS with NeuTTS Air (sovereign stack)
+voice-neutts = [
+    # Core NeuTTS dependencies
+    "llama-cpp-python>=0.2.0",  # GGUF model support
+    "onnxruntime>=1.16.0",      # Codec decoder
+    "neucodec==0.0.4",          # Neural audio codec
+    "phonemizer>=3.3.0",        # Text to phonemes (requires espeak)
+    
+    # Watermarking (optional - can be disabled if problematic)
+    # "perth>=0.2.0",  # Uncomment if you want audio watermarking
+    
+    # Audio processing
+    "librosa==0.11.0",
+    "soundfile>=0.13.1",
+    "numpy==2.2.6",
+    
+    # ML frameworks
+    "torch>=2.8.0",
+    "transformers>=4.56.1",
 ]
 
 # Testing
