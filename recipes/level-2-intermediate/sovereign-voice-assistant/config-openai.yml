@@ -1,0 +1,17 @@
+# recipes/level-2-intermediate/sovereign-voice-assistant/config-openai.yml
+# REFERENCE CONFIGURATION - OpenAI Provider
+# This is an example configuration showing how to use OpenAI
+# To use this configuration, copy the relevant sections to config.yml
+
+recipe: default.v1
+language: en
+
+assistant_id: voice_banking_assistant
+
+pipeline:
+  - name: CompactLLMCommandGenerator
+    llm:
+      model_group: openai_llm  # References model group in endpoints.yml
+
+policies:
+  - name: FlowPolicy

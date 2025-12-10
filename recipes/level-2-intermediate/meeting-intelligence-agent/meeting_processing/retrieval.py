@@ -1,4 +1,4 @@
-# recipes/level-3-advanced/meeting-intelligence-agent/meeting_processing/retrieval.py
+# recipes/level-2-intermediate/meeting-intelligence-agent/meeting_processing/retrieval.py
 """
 Hybrid retrieval combining keyword search and semantic search via ChromaDB.
 

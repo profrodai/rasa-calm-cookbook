@@ -749,7 +749,7 @@ add-paths: ## Add file paths as first-line comments to all Python files
 	@rm add_paths.py
 	@echo "${GREEN}✓ File paths added to all files${RESET}"
 
-	.PHONY: flatten
+.PHONY: flatten
 flatten: ## Concatenate project files into flat.txt
 	@echo "${BLUE}Flattening project files into flat.txt...${RESET}"
 	@echo 'import os' > flatten_files.py

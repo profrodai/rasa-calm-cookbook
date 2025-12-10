@@ -1,0 +1,85 @@
+# recipes/level-2-intermediate/sovereign-voice-assistant/pyproject.toml
+[project]
+name = "voice-assistant"
+version = "0.1.0"
+description = "Voice-enabled banking assistant with Rime TTS and Deepgram ASR"
+requires-python = ">=3.10,<3.12"
+
+# Note: This is a Rasa project, not a Python package.
+# Dependencies should be installed at the root level via:
+#   make install-intermediate  (from root)
+#   make install-voice-full    (from root, after system deps)
+#
+# This pyproject.toml serves as documentation only.
+
+# Recipe-specific dependencies (install manually if needed)
+dependencies = [
+    "rasa-pro>=3.8.0",
+    "rasa-sdk>=3.8.0",
+    "openai>=1.0.0",
+    "websockets>=10.0",
+    "aiohttp>=3.8.0",
+]
+
+[project.optional-dependencies]
+# Optional voice provider alternatives
+azure = [
+    "azure-cognitiveservices-speech>=1.30.0",
+]
+
+# Full voice support (requires system libraries)
+voice-full = [
+    "pyaudio>=0.2.11",  # Requires: brew install portaudio (macOS)
+]
+
+# Testing
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+# Automated voice testing
+voice-automation = [
+    "gtts>=2.3.0",      # Generate test audio files
+    "pydub>=0.25.0",    # Audio processing (requires ffmpeg)
+    "aiohttp>=3.8.0",   # HTTP client for tests
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+exclude = [
+    ".venv",
+    "models",
+    "logs",
+    "tests/audio",  # Exclude generated audio files
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+]
+
+[tool.ruff.lint.per-file-ignores]
+"actions/*.py" = ["ANN"]  # Disable annotation warnings in actions
+"tests/generate_test_audio.py" = ["T201"]  # Allow print in test generator
+"tests/test_voice_automated.py" = ["T201"]  # Allow print in test runner
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "voice: marks tests as voice-specific tests",
+    "integration: marks tests as integration tests",
+    "automated: marks tests as automated voice tests",
+]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]

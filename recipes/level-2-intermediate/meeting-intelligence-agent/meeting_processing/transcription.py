@@ -1,4 +1,4 @@
-# recipes/level-3-advanced/meeting-intelligence-agent/meeting_processing/transcription.py
+# recipes/level-2-intermediate/meeting-intelligence-agent/meeting_processing/transcription.py
 """
 Audio transcription using faster-whisper (optimized for M4 Mac).
 

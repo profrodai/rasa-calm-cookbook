@@ -601,5 +601,64 @@ flatten: ## Concatenate project files into flat.txt
 	@rm flatten_files.py
 	@echo "${GREEN}✓ Created flat.txt with concatenated project files${RESET}"
 
+.PHONY: check-llm
+check-llm: ## Check current LLM provider configuration
+	@echo "${BLUE}Checking LLM provider configuration...${RESET}"
+	@$(PYTHON) check_llm_provider.py
+
+.PHONY: use-ollama
+use-ollama: ## Switch to Ollama (local)
+	@echo "${BLUE}Switching to Ollama (local sovereign stack)...${RESET}"
+	@sed -i.bak 's/model_group: openai_llm/model_group: ollama_llm/' config.yml || \
+	 sed -i.bak 's/model_group: [a-z_]*/model_group: ollama_llm/' config.yml
+	@rm -f config.yml.bak
+	@echo "${GREEN}✓ Switched to Ollama${RESET}"
+	@echo ""
+	@$(PYTHON) check_llm_provider.py
+
+.PHONY: use-openai
+use-openai: ## Switch to OpenAI (cloud)
+	@echo "${BLUE}Switching to OpenAI (cloud)...${RESET}"
+	@sed -i.bak 's/model_group: ollama_llm/model_group: openai_llm/' config.yml || \
+	 sed -i.bak 's/model_group: [a-z_]*/model_group: openai_llm/' config.yml
+	@rm -f config.yml.bak
+	@echo "${GREEN}✓ Switched to OpenAI${RESET}"
+	@echo ""
+	@$(PYTHON) check_llm_provider.py
+
+.PHONY: show-provider
+show-provider: ## Show current provider (simple)
+	@echo "${BLUE}Current LLM provider:${RESET}"
+	@grep "model_group:" config.yml | head -1 | sed 's/.*model_group: /  /'
+
+
+test-with-provider: check-llm ## Test with visual provider indication
+	@echo ""
+	@echo "${BLUE}Starting tests...${RESET}"
+	@$(PYTHON) -m rasa test
+
+
+run-with-check: check-llm ## Run Rasa with provider check first
+	@echo ""
+	@read -p "Press Enter to start Rasa with this configuration..." dummy
+	@$(PYTHON) -m rasa run
+
+# Shell with provider check
+shell-with-check: check-llm
+	@echo ""
+	@read -p "Press Enter to start Rasa shell with this configuration..." dummy
+	@$(PYTHON) -m rasa shell
+
+# Inspect with provider check
+inspect-with-check: check-llm
+	@echo ""
+	@read -p "Press Enter to start Rasa inspector with this configuration..." dummy
+	@$(PYTHON) -m rasa inspect
+
+# Inspect voice with provider check
+inspect-voice-with-check: check-llm
+	@echo ""
+	@read -p "Press Enter to start Rasa voice inspector with this configuration..." dummy
+	@$(PYTHON) -m rasa inspect --voice
 
 .DEFAULT_GOAL := help

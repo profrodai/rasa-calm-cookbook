@@ -1,0 +1,18 @@
+# recipes/level-2-intermediate/sovereign-voice-assistant/config-local.yml
+# REFERENCE CONFIGURATION - Self-Hosted LLM (vLLM or similar)
+# This is an example configuration showing how to use a self-hosted LLM server
+# Note: This differs from Ollama configuration (see config.yml for Ollama setup)
+# To use this configuration, copy the relevant sections to config.yml
+
+recipe: default.v1
+language: en
+
+assistant_id: voice_banking_assistant
+
+pipeline:
+  - name: CompactLLMCommandGenerator
+    llm:
+      model_group: self_hosted_llm  # Would need to be defined in endpoints.yml
+
+policies:
+  - name: FlowPolicy

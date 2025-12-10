@@ -1,0 +1,18 @@
+# recipes/level-2-intermediate/sovereign-voice-assistant/config.yml
+# Main configuration - switch between providers by changing model_group reference
+recipe: default.v1
+language: en
+
+assistant_id: voice_banking_assistant
+
+pipeline:
+  - name: CompactLLMCommandGenerator
+    llm:
+      # Switch between providers by changing the model_group:
+      # - openai_llm (cloud-based OpenAI)
+      # - ollama_llm (local self-hosted Ollama)
+      # All model parameters (temperature, timeout, etc.) are defined in endpoints.yml
+      model_group: ollama_llm
+
+policies:
+  - name: FlowPolicy

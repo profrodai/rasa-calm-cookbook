@@ -1,4 +1,4 @@
-# recipes/level-3-advanced/meeting-intelligence-agent/meeting_processing/storage.py
+# recipes/level-2-intermediate/meeting-intelligence-agent/meeting_processing/storage.py
 """
 Helper functions for reading and writing JSON files.
 

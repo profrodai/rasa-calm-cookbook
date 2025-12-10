@@ -1,0 +1,17 @@
+# recipes/level-2-intermediate/sovereign-voice-assistant/config-azure.yml
+# REFERENCE CONFIGURATION - Azure OpenAI Service
+# This is an example configuration showing how to use Azure OpenAI
+# To use this configuration, copy the relevant sections to config.yml
+
+recipe: default.v1
+language: en
+
+assistant_id: voice_banking_assistant
+
+pipeline:
+  - name: CompactLLMCommandGenerator
+    llm:
+      model_group: azure_llm  # Would need to be defined in endpoints.yml
+
+policies:
+  - name: FlowPolicy

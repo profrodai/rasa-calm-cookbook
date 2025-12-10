@@ -1,4 +1,4 @@
-# recipes/level-3-advanced/meeting-intelligence-agent/meeting_processing/__init__.py
+# recipes/level-2-intermediate/meeting-intelligence-agent/meeting_processing/__init__.py
 """
 Meeting Processing Module
 

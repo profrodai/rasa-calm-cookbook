@@ -1,4 +1,4 @@
-# recipes/level-3-advanced/meeting-intelligence-agent/actions/actions.py
+# recipes/level-2-intermediate/meeting-intelligence-agent/actions/actions.py
 """
 Custom Rasa Actions for Meeting Intelligence Agent
 """

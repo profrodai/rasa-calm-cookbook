@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# recipes/level-2-intermediate/meeting-intelligence-agent/tests/test_meeting_pipeline.py
 # recipes/level-3-advanced/meeting-intelligence-agent/tests/test_meeting_pipeline.py
 """
 Test suite for meeting processing pipeline.

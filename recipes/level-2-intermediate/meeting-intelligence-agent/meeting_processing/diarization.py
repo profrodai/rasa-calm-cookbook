@@ -1,4 +1,4 @@
-# recipes/level-3-advanced/meeting-intelligence-agent/meeting_processing/diarization.py
+# recipes/level-2-intermediate/meeting-intelligence-agent/meeting_processing/diarization.py
 """
 Speaker diarization using pyannote.audio.
 
