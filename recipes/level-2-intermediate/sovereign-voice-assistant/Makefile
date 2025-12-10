@@ -273,6 +273,224 @@ setup-recipe: check-venv setup-env ## Verify recipe dependencies are installed
 		echo "${GREEN}✓ All required dependencies are installed${RESET}"; \
 	fi
 
+.PHONY: install-deps
+install-deps: check-venv ## Install all recipe dependencies
+	@echo "${BLUE}Installing recipe dependencies...${RESET}"
+	@echo "${YELLOW}Installing base dependencies...${RESET}"
+	@$(UV) pip install openai websockets aiohttp pyyaml requests --python $(PYTHON)
+	@echo "${GREEN}✓ Base dependencies installed${RESET}"
+
+.PHONY: install-voice-full
+install-voice-full: check-venv ## Install full voice support (PyAudio, Torch, etc - requires system libs)
+	@echo "${BLUE}Installing full voice support dependencies...${RESET}"
+	@echo "${YELLOW}WARNING: This will install large dependencies (~2-3GB):${RESET}"
+	@echo "  - PyTorch (ML framework)"
+	@echo "  - Transformers (HuggingFace)"
+	@echo "  - Audio processing libraries (librosa, soundfile, etc)"
+	@echo ""
+	@echo "${YELLOW}System requirements:${RESET}"
+	@echo "  macOS:   ${GREEN}brew install portaudio${RESET}"
+	@echo "  Ubuntu:  ${GREEN}sudo apt-get install portaudio19-dev python3-pyaudio${RESET}"
+	@echo ""
+	@read -p "Continue with installation? (y/N) " confirm; \
+	if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then \
+		echo "Installation cancelled"; \
+		exit 0; \
+	fi
+	@echo ""
+	@echo "${BLUE}Installing PyAudio (requires portaudio)...${RESET}"
+	@if ! $(UV) pip install pyaudio --python $(PYTHON) 2>/dev/null; then \
+		echo "${RED}✗ PyAudio installation failed${RESET}"; \
+		echo "Please install portaudio first:"; \
+		echo "  macOS:   ${GREEN}brew install portaudio${RESET}"; \
+		echo "  Ubuntu:  ${GREEN}sudo apt-get install portaudio19-dev${RESET}"; \
+		exit 1; \
+	fi
+	@echo "${GREEN}✓ PyAudio installed${RESET}"
+	@echo ""
+	@echo "${BLUE}Installing audio processing libraries...${RESET}"
+	@$(UV) pip install \
+		"librosa==0.11.0" \
+		"soundfile==0.13.1" \
+		"phonemizer==3.3.0" \
+		--python $(PYTHON)
+	@echo "${GREEN}✓ Audio libraries installed${RESET}"
+	@echo ""
+	@echo "${BLUE}Installing PyTorch (this may take several minutes)...${RESET}"
+	@$(UV) pip install "torch==2.8.0" --python $(PYTHON)
+	@echo "${GREEN}✓ PyTorch installed${RESET}"
+	@echo ""
+	@echo "${BLUE}Installing ML libraries...${RESET}"
+	@$(UV) pip install \
+		"transformers==4.56.1" \
+		"neucodec>=0.0.4" \
+		"resemble-perth==1.0.1" \
+		--python $(PYTHON)
+	@echo "${GREEN}✓ ML libraries installed${RESET}"
+	@echo ""
+	@echo "${GREEN}✓ Full voice support installed successfully!${RESET}"
+	@echo ""
+	@echo "${YELLOW}Next steps for local voice:${RESET}"
+	@echo "  1. These libraries enable local TTS/ASR alternatives"
+	@echo "  2. You can now replace Deepgram/Rime with local options"
+	@echo "  3. See documentation for configuration"
+
+.PHONY: check-voice-support
+check-voice-support: check-venv ## Check voice support installation status
+	@echo "${BLUE}Voice Support Status${RESET}"
+	@echo ""
+	@echo "${YELLOW}System Dependencies:${RESET}"
+	@if command -v ffmpeg >/dev/null 2>&1; then \
+		echo "  ${GREEN}✓ ffmpeg${RESET}"; \
+	else \
+		echo "  ${RED}✗ ffmpeg${RESET} (brew install ffmpeg)"; \
+	fi
+	@# Check portaudio (indirect - through pyaudio import)
+	@if $(PYTHON) -c "import pyaudio" 2>/dev/null; then \
+		echo "  ${GREEN}✓ portaudio (via pyaudio)${RESET}"; \
+	else \
+		echo "  ${YELLOW}- portaudio${RESET} (brew install portaudio)"; \
+	fi
+	@echo ""
+	@echo "${YELLOW}Voice Testing Libraries:${RESET}"
+	@for pkg in gtts pydub; do \
+		if $(PYTHON) -c "import $$pkg" 2>/dev/null; then \
+			echo "  ${GREEN}✓ $$pkg${RESET}"; \
+		else \
+			echo "  ${YELLOW}- $$pkg${RESET} (make install-voice-deps)"; \
+		fi; \
+	done
+	@echo ""
+	@echo "${YELLOW}Full Voice Support (Local TTS/ASR):${RESET}"
+	@for pkg in pyaudio librosa soundfile phonemizer torch transformers; do \
+		pkg_import=$$(echo $$pkg | sed 's/-/_/g'); \
+		if $(PYTHON) -c "import $$pkg_import" 2>/dev/null; then \
+			echo "  ${GREEN}✓ $$pkg${RESET}"; \
+		else \
+			echo "  ${YELLOW}- $$pkg${RESET} (make install-voice-full)"; \
+		fi; \
+	done
+	@if $(PYTHON) -c "import neucodec" 2>/dev/null; then \
+		echo "  ${GREEN}✓ neucodec${RESET}"; \
+	else \
+		echo "  ${YELLOW}- neucodec${RESET} (make install-voice-full)"; \
+	fi
+	@if $(PYTHON) -c "import resemble_perth" 2>/dev/null; then \
+		echo "  ${GREEN}✓ resemble-perth${RESET}"; \
+	else \
+		echo "  ${YELLOW}- resemble-perth${RESET} (make install-voice-full)"; \
+	fi
+	@echo ""
+	@echo "${YELLOW}Cloud Voice Services:${RESET}"
+	@if $(PYTHON) -c "import azure.cognitiveservices.speech" 2>/dev/null; then \
+		echo "  ${GREEN}✓ azure-speech${RESET}"; \
+	else \
+		echo "  ${YELLOW}- azure-speech${RESET} (make install-azure-speech)"; \
+	fi
+	@echo ""
+	@echo "${YELLOW}Summary:${RESET}"
+	@if $(PYTHON) -c "import torch, transformers, librosa" 2>/dev/null; then \
+		echo "  ${GREEN}✓ Full voice support is installed${RESET}"; \
+		echo "    You can use local TTS/ASR alternatives"; \
+	else \
+		echo "  ${YELLOW}○ Full voice support not installed${RESET}"; \
+		echo "    Run: ${GREEN}make install-voice-full${RESET}"; \
+	fi
+
+.PHONY: install-system-voice-deps
+install-system-voice-deps: ## Show instructions for installing system voice dependencies
+	@echo "${BLUE}System Voice Dependencies${RESET}"
+	@echo ""
+	@echo "${YELLOW}Required system packages:${RESET}"
+	@echo ""
+	@echo "${BLUE}macOS:${RESET}"
+	@echo "  ${GREEN}brew install portaudio${RESET}  # For PyAudio"
+	@echo "  ${GREEN}brew install ffmpeg${RESET}     # For audio processing"
+	@echo ""
+	@echo "${BLUE}Ubuntu/Debian:${RESET}"
+	@echo "  ${GREEN}sudo apt-get update${RESET}"
+	@echo "  ${GREEN}sudo apt-get install portaudio19-dev python3-pyaudio${RESET}"
+	@echo "  ${GREEN}sudo apt-get install ffmpeg${RESET}"
+	@echo ""
+	@echo "${BLUE}After installing system packages:${RESET}"
+	@echo "  ${GREEN}make install-voice-full${RESET}  # Install Python packages"
+	@echo ""
+	@echo "${YELLOW}Note: Full voice support requires ~2-3GB of disk space${RESET}"
+
+.PHONY: uninstall-voice-full
+uninstall-voice-full: check-venv ## Uninstall full voice support (frees ~2-3GB)
+	@echo "${BLUE}Uninstalling full voice support...${RESET}"
+	@echo "${YELLOW}This will remove: PyTorch, Transformers, and related packages${RESET}"
+	@read -p "Continue? (y/N) " confirm; \
+	if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then \
+		echo "Cancelled"; \
+		exit 0; \
+	fi
+	@$(UV) pip uninstall -y \
+		torch \
+		transformers \
+		librosa \
+		soundfile \
+		phonemizer \
+		neucodec \
+		resemble-perth \
+		pyaudio \
+		2>/dev/null || true
+	@echo "${GREEN}✓ Full voice support uninstalled${RESET}"
+	@echo "${YELLOW}Note: System packages (portaudio, ffmpeg) were not removed${RESET}"
+
+.PHONY: install-voice-deps
+install-voice-deps: check-venv ## Install voice testing dependencies
+	@echo "${BLUE}Installing voice testing dependencies...${RESET}"
+	@$(UV) pip install gtts pydub aiohttp --python $(PYTHON)
+	@echo "${GREEN}✓ Voice testing dependencies installed${RESET}"
+	@echo ""
+	@echo "${YELLOW}Note: You also need ffmpeg installed:${RESET}"
+	@echo "  macOS: ${GREEN}brew install ffmpeg${RESET}"
+	@echo "  Ubuntu: ${GREEN}sudo apt-get install ffmpeg${RESET}"
+
+.PHONY: install-azure-speech
+install-azure-speech: check-venv ## Install Azure speech services
+	@echo "${BLUE}Installing Azure speech services...${RESET}"
+	@$(UV) pip install azure-cognitiveservices-speech --python $(PYTHON)
+	@echo "${GREEN}✓ Azure speech services installed${RESET}"
+
+.PHONY: check-deps
+check-deps: check-venv ## Check if required dependencies are installed
+	@echo "${BLUE}Checking dependencies...${RESET}"
+	@echo ""
+	@echo "${YELLOW}Base dependencies:${RESET}"
+	@for pkg in openai websockets aiohttp pyyaml requests; do \
+		if $(PYTHON) -c "import $$pkg" 2>/dev/null; then \
+			echo "  ${GREEN}✓ $$pkg${RESET}"; \
+		else \
+			echo "  ${RED}✗ $$pkg${RESET}"; \
+		fi; \
+	done
+	@echo ""
+	@echo "${YELLOW}Voice testing (optional):${RESET}"
+	@for pkg in gtts pydub; do \
+		if $(PYTHON) -c "import $$pkg" 2>/dev/null; then \
+			echo "  ${GREEN}✓ $$pkg${RESET}"; \
+		else \
+			echo "  ${YELLOW}- $$pkg (run: make install-voice-deps)${RESET}"; \
+		fi; \
+	done
+	@echo ""
+	@echo "${YELLOW}Azure speech (optional):${RESET}"
+	@if $(PYTHON) -c "import azure.cognitiveservices.speech" 2>/dev/null; then \
+		echo "  ${GREEN}✓ azure-cognitiveservices-speech${RESET}"; \
+	else \
+		echo "  ${YELLOW}- azure-cognitiveservices-speech (run: make install-azure-speech)${RESET}"; \
+	fi
+	@echo ""
+	@echo "${YELLOW}System tools:${RESET}"
+	@if command -v ffmpeg >/dev/null 2>&1; then \
+		echo "  ${GREEN}✓ ffmpeg${RESET}"; \
+	else \
+		echo "  ${YELLOW}- ffmpeg (brew install ffmpeg)${RESET}"; \
+	fi
+
 .PHONY: config-openai
 config-openai: ## Use OpenAI configuration
 	@echo "${BLUE}Setting up OpenAI configuration...${RESET}"
@@ -660,5 +878,168 @@ inspect-voice-with-check: check-llm
 	@echo ""
 	@read -p "Press Enter to start Rasa voice inspector with this configuration..." dummy
 	@$(PYTHON) -m rasa inspect --voice
+
+.PHONY: install-neutts
+install-neutts: check-venv ## Install NeuTTS Air (drop-in Rime replacement)
+	@echo "${BLUE}Installing NeuTTS Air...${RESET}"
+	@echo ""
+	@echo "${YELLOW}Checking system dependencies...${RESET}"
+	@if ! command -v espeak >/dev/null 2>&1; then \
+		echo "${RED}✗ espeak not found${RESET}"; \
+		echo ""; \
+		echo "${YELLOW}Please install espeak first:${RESET}"; \
+		echo "  macOS:   ${GREEN}brew install espeak${RESET}"; \
+		echo "  Ubuntu:  ${GREEN}sudo apt-get install espeak${RESET}"; \
+		echo ""; \
+		echo "Then run: ${GREEN}make install-neutts${RESET}"; \
+		exit 1; \
+	fi
+	@echo "  ${GREEN}✓ espeak installed${RESET}"
+	@echo ""
+	@echo "${BLUE}Installing core dependencies...${RESET}"
+	@$(UV) pip install llama-cpp-python onnxruntime neucodec phonemizer perth --python $(PYTHON)
+	@echo "${GREEN}✓ Core dependencies installed${RESET}"
+	@echo ""
+	@echo "${BLUE}Installing neutts-air module...${RESET}"
+	@echo "${YELLOW}Note: Copying Python module directly (no package installation)${RESET}"
+	@# Create neuttsair directory in site-packages
+	@SITE_PACKAGES=$$($(PYTHON) -c "import site; print(site.getsitepackages()[0])"); \
+	NEUTTS_DIR="$$SITE_PACKAGES/neuttsair"; \
+	TEMP_DIR=$$(mktemp -d); \
+	echo "Cloning neutts-air repository..."; \
+	git clone https://github.com/neuphonic/neutts-air.git "$$TEMP_DIR/neutts-air" --depth 1 --quiet; \
+	echo "Installing neutts-air module to: $$NEUTTS_DIR"; \
+	mkdir -p "$$NEUTTS_DIR"; \
+	cp "$$TEMP_DIR/neutts-air/neuttsair/__init__.py" "$$NEUTTS_DIR/"; \
+	cp "$$TEMP_DIR/neutts-air/neuttsair/neutts.py" "$$NEUTTS_DIR/"; \
+	rm -rf "$$TEMP_DIR"; \
+	if [ -f "$$NEUTTS_DIR/neutts.py" ]; then \
+		echo "${GREEN}✓ neutts-air module installed${RESET}"; \
+	else \
+		echo "${RED}✗ neutts-air installation failed${RESET}"; \
+		exit 1; \
+	fi
+	@echo ""
+	@echo "${GREEN}✓ NeuTTS Air installation complete!${RESET}"
+	@echo ""
+	@echo "${YELLOW}Usage:${RESET}"
+	@echo "  1. Update credentials.yml (see: ${GREEN}make use-neutts${RESET})"
+	@echo "  2. Test: ${GREEN}make test-voice-production${RESET} (works as before)"
+	@echo "  3. No manual voice setup needed - auto-generates from gtts!"
+
+.PHONY: check-neutts
+check-neutts: check-venv ## Check NeuTTS installation status
+	@echo "${BLUE}NeuTTS Installation Check${RESET}"
+	@echo ""
+	@echo "${YELLOW}System Dependencies:${RESET}"
+	@if command -v espeak >/dev/null 2>&1; then \
+		echo "  ${GREEN}✓ espeak${RESET} $$(espeak --version 2>&1 | head -n1)"; \
+	else \
+		echo "  ${RED}✗ espeak${RESET} (brew install espeak)"; \
+	fi
+	@echo ""
+	@echo "${YELLOW}Python Packages:${RESET}"
+	@for pkg in neuttsair llama_cpp onnxruntime neucodec phonemizer perth; do \
+		if $(PYTHON) -c "import $$pkg" 2>/dev/null; then \
+			version=$$($(PYTHON) -c "import $$pkg; print(getattr($$pkg, '__version__', 'unknown'))" 2>/dev/null); \
+			echo "  ${GREEN}✓ $$pkg${RESET} ($$version)"; \
+		else \
+			echo "  ${RED}✗ $$pkg${RESET} (make install-neutts)"; \
+		fi; \
+	done
+	@echo ""
+	@echo "${YELLOW}Module Location:${RESET}"
+	@SITE_PACKAGES=$$($(PYTHON) -c "import site; print(site.getsitepackages()[0])"); \
+	if [ -f "$$SITE_PACKAGES/neuttsair/neutts.py" ]; then \
+		echo "  ${GREEN}✓ neuttsair module found${RESET}"; \
+		echo "    $$SITE_PACKAGES/neuttsair/"; \
+	else \
+		echo "  ${RED}✗ neuttsair module not found${RESET}"; \
+	fi
+	@echo ""
+	@echo "${YELLOW}Reference Generation:${RESET}"
+	@if $(PYTHON) -c "import gtts, pydub" 2>/dev/null; then \
+		echo "  ${GREEN}✓ gtts + pydub installed${RESET} (for auto-reference)"; \
+	else \
+		echo "  ${YELLOW}○ gtts + pydub missing${RESET} (make install-voice-deps)"; \
+	fi
+	@if [ -d ".neutts_cache" ]; then \
+		echo "  ${GREEN}✓ Cache directory exists${RESET}"; \
+		if [ -f ".neutts_cache/default_reference.wav" ]; then \
+			echo "  ${GREEN}✓ Default reference cached${RESET}"; \
+		fi; \
+	fi
+	@echo ""
+	@echo "${YELLOW}Summary:${RESET}"
+	@if $(PYTHON) -c "import neuttsair.neutts" 2>/dev/null && \
+	   command -v espeak >/dev/null 2>&1; then \
+		echo "  ${GREEN}✓ NeuTTS is ready to use${RESET}"; \
+		echo "  ${GREEN}✓ No manual setup needed - auto-generates reference${RESET}"; \
+	else \
+		echo "  ${YELLOW}○ NeuTTS setup incomplete${RESET}"; \
+		echo "    Run: ${GREEN}make install-neutts${RESET}"; \
+	fi
+
+.PHONY: use-neutts
+use-neutts: check-neutts ## Show config to switch to NeuTTS (drop-in for Rime)
+	@echo "${BLUE}Switching to NeuTTS (Local TTS)...${RESET}"
+	@echo ""
+	@if ! $(PYTHON) -c "import neuttsair" 2>/dev/null; then \
+		echo "${RED}✗ NeuTTS not installed${RESET}"; \
+		echo "Run: ${GREEN}make install-neutts${RESET}"; \
+		exit 1; \
+	fi
+	@echo "${YELLOW}Update credentials.yml with:${RESET}"
+	@echo ""
+	@echo "browser_audio:"
+	@echo "  tts:"
+	@echo "    name: custom"
+	@echo "    module: services.neutts_service.NeuTTSService"
+	@echo "    config:"
+	@echo "      backbone_repo: neuphonic/neutts-air-q8-gguf"
+	@echo "      codec_repo: neuphonic/neucodec-onnx-decoder"
+	@echo "      device: cpu"
+	@echo "      auto_generate_reference: true  # No manual setup needed!"
+	@echo ""
+	@echo "${GREEN}✓ Configuration shown above${RESET}"
+	@echo ""
+	@echo "${YELLOW}Then test with:${RESET}"
+	@echo "  ${GREEN}make test-voice-production${RESET}  # Your existing test"
+	@echo "  ${GREEN}make inspect-voice${RESET}          # Interactive testing"
+
+.PHONY: test-neutts-quick
+test-neutts-quick: check-venv ## Quick test NeuTTS with auto-generated reference
+	@if ! $(PYTHON) -c "import neuttsair" 2>/dev/null; then \
+		echo "${RED}✗ NeuTTS not installed${RESET}"; \
+		echo "Run: ${GREEN}make install-neutts${RESET}"; \
+		exit 1; \
+	fi
+	@echo "${BLUE}Testing NeuTTS with auto-generated reference...${RESET}"
+	@$(PYTHON) -c "from services.neutts_service import quick_test; quick_test()"
+	@if [ -f test_output.wav ]; then \
+		echo ""; \
+		echo "${GREEN}✓ Test completed!${RESET}"; \
+		echo "Audio saved to: ${GREEN}test_output.wav${RESET}"; \
+		echo ""; \
+		echo "Listen with:"; \
+		echo "  macOS:  ${GREEN}afplay test_output.wav${RESET}"; \
+		echo "  Linux:  ${GREEN}aplay test_output.wav${RESET}"; \
+	fi
+
+.PHONY: clean-neutts-cache
+clean-neutts-cache: ## Clean NeuTTS cache (will regenerate on next use)
+	@echo "${BLUE}Cleaning NeuTTS cache...${RESET}"
+	@rm -rf .neutts_cache
+	@rm -f test_output.wav
+	@echo "${GREEN}✓ Cache cleaned${RESET}"
+	@echo "${YELLOW}Reference will be regenerated on next use${RESET}"
+
+.PHONY: uninstall-neutts
+uninstall-neutts: check-venv ## Uninstall NeuTTS Air
+	@echo "${BLUE}Uninstalling NeuTTS Air module...${RESET}"
+	@SITE_PACKAGES=$$($(PYTHON) -c "import site; print(site.getsitepackages()[0])"); \
+	rm -rf "$$SITE_PACKAGES/neuttsair"; \
+	echo "${GREEN}✓ neuttsair module removed${RESET}"
+	@echo "${YELLOW}Note: Core dependencies not removed (may be used elsewhere)${RESET}"
 
 .DEFAULT_GOAL := help
