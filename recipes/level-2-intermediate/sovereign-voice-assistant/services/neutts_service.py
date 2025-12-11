@@ -1,17 +1,30 @@
-# recipes/level-2-intermediate/sovereign-voice-assistant/services/neutts_service.py
-"""
-NeuTTS Air TTS Service for Rasa - Auto-Reference Version
-Drop-in replacement for Rime with automatic reference generation
-Compatible with existing test infrastructure (gtts-based)
-"""
-
-# CRITICAL: Configure espeak library BEFORE any phonemizer imports
-# This must happen at module import time, not class init time
+import os
+import io
 import platform
 import glob
+import logging
+import audioop
+import numpy as np
+import importlib.util
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional, AsyncIterator, Dict, Any
 
-if platform.system() == "Darwin":  # macOS
-    # Common Homebrew paths for espeak
+# Rasa specific imports
+from rasa.core.channels.voice_stream.audio_bytes import RasaAudioBytes
+from rasa.core.channels.voice_stream.tts.tts_engine import (
+    TTSEngine,
+    TTSEngineConfig,
+    TTSError,
+)
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# ==============================================================================
+# 1. macOS Espeak Fix (Must run before other imports)
+# ==============================================================================
+if platform.system() == "Darwin":
     possible_paths = [
         "/opt/homebrew/Cellar/espeak/*/lib/libespeak.*.dylib",
         "/usr/local/Cellar/espeak/*/lib/libespeak.*.dylib",
@@ -19,230 +32,180 @@ if platform.system() == "Darwin":  # macOS
     for pattern in possible_paths:
         matches = glob.glob(pattern)
         if matches:
-            espeak_lib = matches[0]
             try:
-                from phonemizer.backend.espeak.wrapper import EspeakWrapper
-                EspeakWrapper.set_library(espeak_lib)
-                print(f"✓ espeak library configured: {espeak_lib}")
-            except Exception as e:
-                print(f"Warning: Could not set espeak library: {e}")
+                # We access the wrapper via importlib to avoid crashing if phonemizer isn't installed yet
+                if importlib.util.find_spec("phonemizer"):
+                    from phonemizer.backend.espeak.wrapper import EspeakWrapper
+                    EspeakWrapper.set_library(matches[0])
+                    logger.info(f"Espeak configured at: {matches[0]}")
+            except Exception:
+                pass
             break
 
-# Now safe to import other modules
-import os
-import io
-from pathlib import Path
-from typing import Optional
-import soundfile as sf
-import torch
+# ==============================================================================
+# 2. Configuration Class
+# ==============================================================================
+@dataclass
+class NeuTTSConfig(TTSEngineConfig):
+    """Configuration variables matching credentials.yml"""
+    backbone_repo: str = "neuphonic/neutts-air-q8-gguf"
+    codec_repo: str = "neuphonic/neucodec"
+    device: str = "cpu"
+    auto_generate_reference: bool = True
+    reference_audio: Optional[str] = None
+    reference_text: Optional[str] = None
 
-
-class NeuTTSService:
-    """Local TTS using Neuphonic NeuTTS Air with auto-generated references"""
+# ==============================================================================
+# 3. Main Service Class
+# ==============================================================================
+class NeuTTSService(TTSEngine[NeuTTSConfig]):
+    """
+    Rasa-compliant wrapper for NeuTTS Air.
+    Converts 24kHz Float32 audio -> 8kHz Mulaw for Rasa Browser Channel.
+    """
     
-    # Default reference voice - uses auto-generated gtts sample
-    DEFAULT_REF_TEXT = "Hello, I'm your banking assistant. I can help you today."
-    
-    def __init__(
-        self,
-        backbone_repo: str = "neuphonic/neutts-air-q8-gguf",
-        codec_repo: str = "neuphonic/neucodec",
-        device: str = "cpu",
-        reference_audio: Optional[str] = None,
-        reference_text: Optional[str] = None,
-        auto_generate_reference: bool = True,
-    ):
-        """
-        Initialize NeuTTS service with automatic reference generation.
-        
-        Args:
-            backbone_repo: HuggingFace repo for model (q8-gguf recommended)
-            codec_repo: HuggingFace repo for codec (onnx recommended)
-            device: Device to run on (cpu/gpu)
-            reference_audio: Path to reference voice (optional - will auto-generate)
-            reference_text: Text for reference (optional - will use default)
-            auto_generate_reference: If True, generates reference from gtts if missing
-        """
-        try:
-            from neuttsair.neutts import NeuTTSAir
-        except ImportError as e:
-            raise ImportError(
-                "NeuTTS Air not installed. Install with:\n"
-                "  make install-neutts"
-            ) from e
-        
-        print(f"Loading NeuTTS from {backbone_repo} on {device}...")
-        
-        self.tts = NeuTTSAir(
-            backbone_repo=backbone_repo,
-            backbone_device=device,
-            codec_repo=codec_repo,
-            codec_device=device,
-        )
-        
-        self.sample_rate = 24000
+    def __init__(self, config: NeuTTSConfig):
+        super().__init__(config)
+        self.tts = None
         self.ref_codes = None
         self.ref_text = None
+        self._librosa = None
         
-        # Auto-generate reference if none provided
-        if reference_audio is None and auto_generate_reference:
-            print("No reference audio provided - generating default...")
-            reference_audio = self._generate_default_reference()
-            reference_text = self.DEFAULT_REF_TEXT
+        # Lazy load model to avoid overhead if not used immediately
+        # or if dependencies are missing during initial Rasa graph validation
+        self._initialized = False
+
+    @staticmethod
+    def get_default_config() -> NeuTTSConfig:
+        return NeuTTSConfig()
+
+    def _initialize_model(self):
+        """Loads the model and dependencies on first use."""
+        if self._initialized:
+            return
+
+        try:
+            from neuttsair.neutts import NeuTTSAir
+            import librosa
+            self._librosa = librosa
+        except ImportError as e:
+            raise TTSError(f"Missing dependencies for NeuTTS: {e}. Run 'make install-neutts'")
+
+        logger.info(f"Loading NeuTTS backbone: {self.config.backbone_repo}")
         
-        # Load reference voice
-        if reference_audio and reference_text:
-            self.load_reference(reference_audio, reference_text)
-    
-    def _generate_default_reference(self) -> str:
-        """
-        Generate default reference voice using gtts (same as test infrastructure).
-        
-        Returns:
-            Path to generated reference audio file
-        """
+        self.tts = NeuTTSAir(
+            backbone_repo=self.config.backbone_repo,
+            backbone_device=self.config.device,
+            codec_repo=self.config.codec_repo,
+            codec_device=self.config.device,
+        )
+
+        # Handle Reference Audio
+        self._setup_reference_voice()
+        self._initialized = True
+
+    def _setup_reference_voice(self):
+        """Sets up the reference voice (cloning source)."""
+        ref_audio = self.config.reference_audio
+        ref_text = self.config.reference_text or "Hello, I am your banking assistant."
+
+        # If no reference provided, auto-generate one
+        if not ref_audio and self.config.auto_generate_reference:
+            ref_audio = self._generate_gtts_reference(ref_text)
+
+        if ref_audio:
+            logger.info(f"Encoding reference audio: {ref_audio}")
+            self.ref_codes = self.tts.encode_reference(ref_audio)
+            self.ref_text = ref_text
+        else:
+            raise TTSError("No reference audio provided and auto-generation failed.")
+
+    def _generate_gtts_reference(self, text: str) -> str:
+        """Generates a temporary reference file using GTTS."""
         try:
             from gtts import gTTS
-        except ImportError:
-            raise ImportError(
-                "gtts required for auto-reference generation.\n"
-                "Install with: make install-voice-deps"
-            )
-        
-        # Create cache directory
-        cache_dir = Path(".neutts_cache")
-        cache_dir.mkdir(exist_ok=True)
-        
-        ref_path = cache_dir / "default_reference.wav"
-        
-        # Generate if doesn't exist
-        if not ref_path.exists():
-            print(f"  Generating reference with gtts...")
-            tts_gen = gTTS(text=self.DEFAULT_REF_TEXT, lang='en', slow=False)
+            from pydub import AudioSegment
             
-            # Save as mp3 first (gtts limitation)
-            mp3_path = cache_dir / "default_reference.mp3"
-            tts_gen.save(str(mp3_path))
+            cache_dir = Path(".neutts_cache")
+            cache_dir.mkdir(exist_ok=True)
+            wav_path = cache_dir / "default_reference.wav"
             
-            # Convert to WAV using pydub
-            try:
-                from pydub import AudioSegment
+            if not wav_path.exists():
+                logger.info("Generating default reference voice...")
+                mp3_path = cache_dir / "temp.mp3"
+                tts = gTTS(text=text, lang='en')
+                tts.save(str(mp3_path))
                 
+                # Convert to mono 16kHz WAV
                 audio = AudioSegment.from_mp3(str(mp3_path))
-                # Convert to mono, 16kHz (optimal for NeuTTS)
                 audio = audio.set_channels(1).set_frame_rate(16000)
-                audio.export(str(ref_path), format="wav")
-                
-                # Cleanup mp3
+                audio.export(str(wav_path), format="wav")
                 mp3_path.unlink()
                 
-                print(f"  ✓ Generated reference: {ref_path}")
-                
-            except ImportError:
-                raise ImportError(
-                    "pydub required for audio conversion.\n"
-                    "Install with: make install-voice-deps"
-                )
-        else:
-            print(f"  ✓ Using cached reference: {ref_path}")
-        
-        return str(ref_path)
+            return str(wav_path)
+        except Exception as e:
+            logger.error(f"Failed to generate reference: {e}")
+            raise TTSError("Install gtts and pydub to use auto_generate_reference")
+
+    # ==========================================================================
+    # 4. Required Rasa Implementation
+    # ==========================================================================
     
-    def load_reference(self, audio_path: str, text: str):
+    @classmethod
+    def from_config_dict(cls, config: Dict[str, Any]) -> "NeuTTSService":
+        """Load configuration from credentials.yml"""
+        return cls(NeuTTSConfig.from_dict(config))
+
+    def engine_bytes_to_rasa_audio_bytes(self, chunk: bytes) -> RasaAudioBytes:
+        """Required by Rasa: Wraps raw bytes into RasaAudioBytes."""
+        return RasaAudioBytes(chunk)
+
+    async def synthesize(self, text: str, config: Optional[NeuTTSConfig] = None) -> AsyncIterator[RasaAudioBytes]:
         """
-        Load reference voice for cloning.
-        
-        Args:
-            audio_path: Path to reference audio file
-            text: Reference text (or path to text file)
+        1. Generate 24kHz audio from NeuTTS
+        2. Resample to 8kHz
+        3. Convert to Mu-law
+        4. Yield to Rasa
         """
-        # Handle text file or string
-        if os.path.exists(text) and os.path.isfile(text):
-            with open(text, 'r') as f:
-                text = f.read().strip()
-        
-        print(f"Encoding reference audio: {audio_path}")
-        self.ref_codes = self.tts.encode_reference(audio_path)
-        self.ref_text = text
-        print("✓ Reference voice loaded successfully")
-    
-    def synthesize(self, text: str, output_path: Optional[str] = None) -> bytes:
-        """
-        Convert text to speech.
-        
-        Args:
-            text: Text to synthesize
-            output_path: Optional path to save audio file
-            
-        Returns:
-            Audio data as bytes (WAV format)
-            
-        Raises:
-            ValueError: If no reference voice loaded
-        """
-        if self.ref_codes is None:
-            raise ValueError(
-                "No reference voice loaded. This should not happen with "
-                "auto_generate_reference=True."
-            )
-        
-        # Truncate for logging
-        display_text = text[:50] + "..." if len(text) > 50 else text
-        print(f"Synthesizing: {display_text}")
-        
-        wav = self.tts.infer(text, self.ref_codes, self.ref_text)
-        
-        # Optionally save to file
-        if output_path:
-            sf.write(output_path, wav, self.sample_rate)
-            print(f"✓ Saved to {output_path}")
-        
-        # Convert to bytes for Rasa
-        buffer = io.BytesIO()
-        sf.write(buffer, wav, self.sample_rate, format='WAV')
-        buffer.seek(0)
-        return buffer.getvalue()
-    
-    def synthesize_stream(self, text: str):
-        """
-        Stream audio synthesis (GGUF models only).
-        
-        Args:
-            text: Text to synthesize
-            
-        Yields:
-            Audio chunks as numpy arrays
-            
-        Raises:
-            NotImplementedError: If model doesn't support streaming
-        """
+        if not self._initialized:
+            self._initialize_model()
+
+        # Sanity check for empty text
+        if not text or not text.strip():
+            return
+
+        logger.debug(f"Synthesizing: {text[:30]}...")
+
+        # 1. Inference
+        # NeuTTS returns a numpy array (float32) at 24000Hz
         try:
-            for chunk in self.tts.infer_stream(text, self.ref_codes, self.ref_text):
-                yield chunk
-        except (AttributeError, NotImplementedError):
-            raise NotImplementedError(
-                "Streaming requires GGUF model. Use:\n"
-                "  backbone_repo: neuphonic/neutts-air-q8-gguf"
-            )
+            # We use the blocking infer call because streaming infer in NeuTTS 
+            # might not support the chunk-based resampling cleanly yet.
+            wav_24k = self.tts.infer(text, self.ref_codes, self.ref_text)
+        except Exception as e:
+            logger.error(f"NeuTTS Inference failed: {e}")
+            return
 
+        if len(wav_24k) == 0:
+            return
 
-# For backward compatibility with test scripts
-def quick_test(
-    text: str = "Hello, this is a test of the local text to speech system.",
-    output_path: str = "test_output.wav"
-):
-    """Quick test with auto-generated reference."""
-    tts = NeuTTSService(
-        backbone_repo="neuphonic/neutts-air-q8-gguf",
-        codec_repo="neuphonic/neucodec",
-        device="cpu",
-        auto_generate_reference=True
-    )
-    
-    audio = tts.synthesize(text, output_path=output_path)
-    print(f"✓ Generated {len(audio)} bytes of audio")
-    return audio
+        # 2. Resample 24kHz -> 8kHz (Required by Rasa)
+        # Using librosa for high quality resampling
+        # orig_sr=24000 is the NeuTTS default
+        wav_8k = self._librosa.resample(wav_24k, orig_sr=24000, target_sr=8000)
 
+        # 3. Convert Float32 [-1, 1] -> Int16 PCM [ -32768, 32767 ]
+        # Clip to prevent overflow artifacts
+        wav_8k = np.clip(wav_8k, -1.0, 1.0)
+        pcm_data = (wav_8k * 32767).astype(np.int16).tobytes()
 
-if __name__ == "__main__":
-    quick_test()
+        # 4. Convert Int16 PCM -> Mulaw (Required by Rasa)
+        # 2 bytes width = 16 bit
+        try:
+            mulaw_data = audioop.lin2ulaw(pcm_data, 2)
+            
+            # 5. Yield result
+            yield self.engine_bytes_to_rasa_audio_bytes(mulaw_data)
+            
+        except Exception as e:
+            logger.error(f"Audio encoding failed: {e}")

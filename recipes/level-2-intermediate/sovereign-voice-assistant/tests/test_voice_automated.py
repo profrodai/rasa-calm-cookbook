@@ -1,386 +1,170 @@
-# recipes/level-2-intermediate/sovereign-voice-assistant/tests/test_voice_automated.py
-#!/usr/bin/env python3
-"""
-Automated Voice Testing Script for Rasa CALM Voice Assistant
+import sys
+import os
+import warnings
+import traceback
+from pathlib import Path
 
-This script tests voice capabilities by:
-1. Sending pre-recorded audio files to the voice channel
-2. Receiving and validating bot responses
-3. Checking both transcription and TTS output
+# 1. Suppress deprecation warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-Usage:
-    python tests/test_voice_automated.py
-"""
+# 2. Add project root to Python path
+sys.path.append(str(Path(__file__).parent.parent.absolute()))
 
 import asyncio
 import aiohttp
-import json
+import logging
 import wave
-import time
-from pathlib import Path
-from typing import Dict, List, Optional
-import sys
+import json
+import audioop  # Required for format conversion
+import uuid
+from typing import Optional, List, Dict
+
+# Import your actual TTS service
+try:
+    from services.neutts_service import NeuTTSService, NeuTTSConfig
+except ImportError as e:
+    print(f"\n❌ CRITICAL ERROR: Could not import NeuTTSService.")
+    traceback.print_exc()
+    sys.exit(1)
 
 # Configuration
-RASA_URL = "http://localhost:5005"
-# When using 'rasa inspect', we need to use the callback REST endpoint
-# This is different from the standard REST webhook
-CALLBACK_WEBHOOK = f"{RASA_URL}/conversations/test-user/messages"
-SENDER_ID = "test-voice-user"
+RASA_URL = "http://localhost:5005/webhooks/rest/webhook"
 TEST_AUDIO_DIR = Path("tests/audio")
+OUTPUT_DIR = Path("tests/audio_responses_real")
+DEEPGRAM_URL = "https://api.deepgram.com/v1/listen?model=nova-2-general&smart_format=true"
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
 
 class Colors:
-    """Terminal colors for output."""
     GREEN = '\033[92m'
-    RED = '\033[91m'
-    YELLOW = '\033[93m'
     BLUE = '\033[94m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
     RESET = '\033[0m'
 
-class VoiceTestResult:
-    """Store test results."""
-    def __init__(self, test_name: str):
-        self.test_name = test_name
-        self.passed = False
-        self.message = ""
-        self.duration = 0.0
-        self.transcription = ""
-        self.bot_response = ""
-    
-    def __str__(self):
-        status = f"{Colors.GREEN}✓ PASS{Colors.RESET}" if self.passed else f"{Colors.RED}✗ FAIL{Colors.RESET}"
-        return f"{status} {self.test_name} ({self.duration:.2f}s)\n  Transcribed: '{self.transcription}'\n  Bot said: '{self.bot_response}'\n  {self.message}"
-
-
-async def send_message_to_rasa(message: str, sender_id: str) -> Dict:
-    """Send text message to Rasa via the conversations API.
-    
-    This endpoint is available when using 'rasa inspect' and works for testing.
-    """
-    
-    payload = {
-        "text": message,
-        "sender": "user"
-    }
-    
-    # Build URL with sender_id
-    url = f"{RASA_URL}/conversations/{sender_id}/messages"
-    
-    # Send to Rasa
+async def deepgram_transcribe(audio_path: Path, api_key: str) -> str:
     async with aiohttp.ClientSession() as session:
+        with open(audio_path, 'rb') as audio_file:
+            headers = {"Authorization": f"Token {api_key}", "Content-Type": "audio/wav"}
+            async with session.post(DEEPGRAM_URL, headers=headers, data=audio_file) as response:
+                if response.status != 200:
+                    raise Exception(f"Deepgram Error {response.status}: {await response.text()}")
+                data = await response.json()
+                try:
+                    return data['results']['channels'][0]['alternatives'][0]['transcript']
+                except (KeyError, IndexError):
+                    return ""
+
+async def rasa_process(text: str, sender_id: str) -> List[str]:
+    payload = {"sender": sender_id, "message": text}
+    async with aiohttp.ClientSession() as session:
+        async with session.post(RASA_URL, json=payload) as response:
+            if response.status != 200:
+                raise Exception(f"Rasa Error {response.status}")
+            messages = await response.json()
+            return [m.get("text") for m in messages if "text" in m]
+
+async def neutts_synthesize(text: str, tts_service: NeuTTSService, output_path: Path):
+    """
+    Generates audio, converts it to standard WAV (Linear PCM), and saves it.
+    """
+    # 1. Collect all u-law encoded chunks from the service
+    ulaw_data = bytearray()
+    async for chunk in tts_service.synthesize(text):
+        ulaw_data.extend(chunk)
+    
+    if not ulaw_data:
+        raise Exception("TTS generated no audio data")
+
+    # 2. Convert u-law (Rasa format) back to Linear PCM (Standard WAV format)
+    # This is necessary because python's 'wave' module cannot write compressed files.
+    # 2 = sample width (16-bit audio)
+    pcm_data = audioop.ulaw2lin(ulaw_data, 2)
+
+    # 3. Save as standard 16-bit 8kHz Mono WAV
+    with wave.open(str(output_path), 'wb') as wav_file:
+        wav_file.setnchannels(1)      # Mono
+        wav_file.setsampwidth(2)      # 16-bit (2 bytes)
+        wav_file.setframerate(8000)   # 8kHz
+        wav_file.setcomptype('NONE', 'not compressed') # Standard PCM
+        wav_file.writeframes(pcm_data)
+
+async def run_pipeline():
+    print(f"\n{Colors.BLUE}=== Starting End-to-End Voice Pipeline Test ==={Colors.RESET}")
+    
+    if not TEST_AUDIO_DIR.exists():
+        print(f"{Colors.RED}❌ No test audio found at {TEST_AUDIO_DIR}.{Colors.RESET}")
+        return
+
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    deepgram_key = os.getenv("DEEPGRAM_API_KEY")
+    if not deepgram_key:
+        print(f"{Colors.RED}❌ Missing DEEPGRAM_API_KEY env var.{Colors.RESET}")
+        return
+
+    print(f"{Colors.BLUE}Initializing NeuTTS Engine (this loads the model)...{Colors.RESET}")
+    try:
+        # Use config matching credentials.yml
+        tts_config = NeuTTSConfig(
+            backbone_repo="neuphonic/neutts-air-q8-gguf",
+            codec_repo="neuphonic/neucodec",
+            device="cpu",
+            auto_generate_reference=True
+        )
+        tts_service = NeuTTSService(tts_config)
+    except Exception:
+        print(f"{Colors.RED}❌ Failed to initialize NeuTTS:{Colors.RESET}")
+        traceback.print_exc()
+        return
+
+    test_files = ["check_balance.wav", "transfer_money.wav", "lost_card.wav"]
+    print(f"\n{Colors.BLUE}Pipeline Ready. Processing files...{Colors.RESET}\n")
+
+    # Use a unique sender_id for the entire run to maintain context if needed,
+    # OR create a new one per file if you want fresh state.
+    # Here we use a fresh ID per file to test flows in isolation.
+    
+    for filename in test_files:
+        file_path = TEST_AUDIO_DIR / filename
+        if not file_path.exists(): continue
+
+        # Generate a random ID for this specific test case so Rasa state is clean
+        sender_id = f"tester-{uuid.uuid4().hex[:8]}"
+
+        print(f"{Colors.YELLOW}▶ Processing: {filename}{Colors.RESET}")
         try:
-            async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    # Debug: Print actual response
-                    print(f"{Colors.YELLOW}DEBUG: Response type: {type(data)}{Colors.RESET}")
-                    print(f"{Colors.YELLOW}DEBUG: Response: {data}{Colors.RESET}")
-                    
-                    # The conversations API returns messages in a different format
-                    # Extract bot responses
-                    if isinstance(data, dict) and 'messages' in data:
-                        return data['messages']
-                    elif isinstance(data, list):
-                        return data
-                    else:
-                        return [data] if data else []
-                else:
-                    text = await response.text()
-                    raise Exception(f"Rasa returned status {response.status}: {text}")
-        except aiohttp.ClientError as e:
-            raise Exception(f"Failed to connect to Rasa: {e}")
+            # 1. Transcribe
+            print(f"  🎤 Transcribing...", end=" ", flush=True)
+            transcript = await deepgram_transcribe(file_path, deepgram_key)
+            print(f"{Colors.GREEN}Done{Colors.RESET} ('{transcript}')")
 
+            if not transcript: continue
 
-async def test_check_balance_flow():
-    """Test: Complete check balance flow."""
-    result = VoiceTestResult("Check Balance Flow")
-    start_time = time.time()
-    
-    try:
-        # Step 1: Send "What's my balance?"
-        print(f"{Colors.BLUE}Sending message: 'What's my balance?'{Colors.RESET}")
-        response1 = await send_message_to_rasa(
-            "What's my balance?",
-            SENDER_ID
-        )
-        
-        # Validate step 1
-        if not response1:
-            result.message = "No response from Rasa for initial query"
-            return result
-        
-        # Extract bot text from response - handle both dict and list formats
-        bot_messages = []
-        for msg in response1:
-            if isinstance(msg, dict):
-                if 'text' in msg:
-                    bot_messages.append(msg['text'])
-                elif 'recipient_id' in msg and 'text' in msg:
-                    bot_messages.append(msg['text'])
-        
-        bot_text_1 = " ".join(bot_messages)
-        result.bot_response = bot_text_1
-        result.transcription = "What's my balance?"
-        
-        if not bot_text_1 or "account" not in bot_text_1.lower():
-            result.message = f"Bot didn't ask about account type. Got: '{bot_text_1}'"
-            return result
-        
-        print(f"{Colors.GREEN}✓ Bot asked about account type{Colors.RESET}")
-        
-        # Step 2: Send "Checking"
-        await asyncio.sleep(1)  # Brief pause
-        print(f"{Colors.BLUE}Sending message: 'Checking'{Colors.RESET}")
-        response2 = await send_message_to_rasa(
-            "Checking",
-            SENDER_ID
-        )
-        
-        # Validate step 2
-        if not response2:
-            result.message = "No response for account type"
-            return result
-        
-        # Extract bot text
-        bot_messages2 = []
-        for msg in response2:
-            if isinstance(msg, dict) and 'text' in msg:
-                bot_messages2.append(msg['text'])
-        
-        bot_text_2 = " ".join(bot_messages2)
-        result.bot_response += f" → {bot_text_2}"
-        
-        if not bot_text_2 or "balance" not in bot_text_2.lower():
-            result.message = f"Bot didn't provide balance. Got: '{bot_text_2}'"
-            return result
-        
-        print(f"{Colors.GREEN}✓ Bot provided balance{Colors.RESET}")
-        
-        result.passed = True
-        result.message = "Flow completed successfully"
-        
-    except Exception as e:
-        result.message = f"Error: {str(e)}"
-    finally:
-        result.duration = time.time() - start_time
-    
-    return result
-
-
-async def test_transfer_money_flow():
-    """Test: Complete transfer money flow."""
-    result = VoiceTestResult("Transfer Money Flow")
-    start_time = time.time()
-    
-    try:
-        # Use a fresh conversation
-        sender = f"{SENDER_ID}-transfer"
-        
-        # Step 1: "Transfer money"
-        print(f"{Colors.BLUE}Sending message: 'Transfer money'{Colors.RESET}")
-        response1 = await send_message_to_rasa(
-            "I want to transfer money",
-            sender
-        )
-        
-        if not response1:
-            result.message = "No response for transfer initiation"
-            return result
-        
-        result.transcription = "I want to transfer money"
-        
-        # Steps 2-5: Source account, destination, amount, confirmation
-        messages = [
-            ("checking", "from account"),
-            ("savings", "to account"),
-            ("500", "amount"),
-            ("yes", "confirmation")
-        ]
-        
-        for message, expected_context in messages:
-            await asyncio.sleep(0.5)
-            print(f"{Colors.BLUE}Sending message: '{message}'{Colors.RESET}")
-            response = await send_message_to_rasa(message, sender)
+            # 2. Rasa Process (Using the random sender_id)
+            print(f"  🧠 Rasa processing...", end=" ", flush=True)
+            responses = await rasa_process(transcript, sender_id)
+            print(f"{Colors.GREEN}Done{Colors.RESET}")
             
-            if not response:
-                result.message = f"No response for {expected_context}"
-                return result
-        
-        # Check final response mentions transfer completion
-        bot_messages = []
-        for msg in response:
-            if isinstance(msg, dict) and 'text' in msg:
-                bot_messages.append(msg['text'])
-        
-        final_text = " ".join(bot_messages)
-        result.bot_response = final_text
-        
-        if final_text and "transfer" in final_text.lower() and ("complete" in final_text.lower() or "done" in final_text.lower()):
-            result.passed = True
-            result.message = "Transfer flow completed"
-        else:
-            result.message = f"Transfer may not have completed. Final response: '{final_text}'"
-        
-    except Exception as e:
-        result.message = f"Error: {str(e)}"
-    finally:
-        result.duration = time.time() - start_time
-    
-    return result
+            for i, response_text in enumerate(responses):
+                print(f"     🤖 Bot: \"{response_text}\"")
+                out_filename = f"{file_path.stem}_response_{i+1}.wav"
+                out_path = OUTPUT_DIR / out_filename
+                
+                # 3. TTS Synthesis
+                print(f"  🔊 Synthesizing...", end=" ", flush=True)
+                await neutts_synthesize(response_text, tts_service, out_path)
+                print(f"{Colors.GREEN}Saved to {out_path}{Colors.RESET}")
 
+        except Exception as e:
+            print(f"\n{Colors.RED}❌ Pipeline failed: {e}{Colors.RESET}")
+            traceback.print_exc()
+        print("-" * 50)
 
-async def test_lost_card_flow():
-    """Test: Report lost card flow."""
-    result = VoiceTestResult("Report Lost Card Flow")
-    start_time = time.time()
-    
-    try:
-        sender = f"{SENDER_ID}-lostcard"
-        
-        # Step 1: "I lost my card"
-        print(f"{Colors.BLUE}Sending message: 'I lost my card'{Colors.RESET}")
-        response1 = await send_message_to_rasa(
-            "I lost my card",
-            sender
-        )
-        
-        if not response1:
-            result.message = "No response for lost card report"
-            return result
-        
-        result.transcription = "I lost my card"
-        
-        # Step 2: Card digits "4532"
-        await asyncio.sleep(0.5)
-        print(f"{Colors.BLUE}Sending message: '4532'{Colors.RESET}")
-        response2 = await send_message_to_rasa(
-            "4532",
-            sender
-        )
-        
-        if not response2:
-            result.message = "No response for card digits"
-            return result
-        
-        # Extract bot text
-        bot_messages = []
-        for msg in response2:
-            if isinstance(msg, dict) and 'text' in msg:
-                bot_messages.append(msg['text'])
-        
-        final_text = " ".join(bot_messages)
-        result.bot_response = final_text
-        
-        if final_text and ("block" in final_text.lower() or "cancel" in final_text.lower()):
-            result.passed = True
-            result.message = "Card blocking flow completed"
-        else:
-            result.message = f"Card may not have been blocked. Response: '{final_text}'"
-        
-    except Exception as e:
-        result.message = f"Error: {str(e)}"
-    finally:
-        result.duration = time.time() - start_time
-    
-    return result
-
-
-async def check_rasa_connection():
-    """Check if Rasa is running and accessible."""
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{RASA_URL}/", timeout=aiohttp.ClientTimeout(total=5)) as response:
-                if response.status == 200:
-                    print(f"{Colors.GREEN}✓ Rasa server is running at {RASA_URL}{Colors.RESET}")
-                    return True
-    except Exception as e:
-        print(f"{Colors.RED}✗ Cannot connect to Rasa at {RASA_URL}{Colors.RESET}")
-        print(f"  Error: {e}")
-        print(f"\n{Colors.YELLOW}Please start Rasa first:{Colors.RESET}")
-        print(f"  make inspect-voice")
-        return False
-
-
-def check_audio_files():
-    """Check if test audio files exist (optional - tests use text)."""
-    # Audio files are optional since we're using text messages via REST channel
-    # They're only needed if you want to actually test voice recognition
-    
-    if not TEST_AUDIO_DIR.exists() or not any(TEST_AUDIO_DIR.glob("*.wav")):
-        print(f"{Colors.YELLOW}ℹ️  Note: No audio files found{Colors.RESET}")
-        print(f"  Tests will use text messages via REST channel")
-        print(f"  To test actual voice recognition, generate audio with:")
-        print(f"  {Colors.GREEN}make generate-test-audio{Colors.RESET}")
-        print()
-        return True  # Still allow tests to run
-    
-    print(f"{Colors.GREEN}✓ Test audio files found (optional){Colors.RESET}")
-    return True
-
-
-async def run_all_tests():
-    """Run all voice tests."""
-    print(f"\n{Colors.BLUE}{'='*60}{Colors.RESET}")
-    print(f"{Colors.BLUE}Automated Conversation Testing Suite{Colors.RESET}")
-    print(f"{Colors.BLUE}{'='*60}{Colors.RESET}\n")
-    
-    # Pre-flight checks
-    if not await check_rasa_connection():
-        return 1
-    
-    check_audio_files()  # Optional check
-    
-    print(f"\n{Colors.BLUE}Running conversation tests...{Colors.RESET}\n")
-    
-    # Run tests
-    tests = [
-        test_check_balance_flow(),
-        test_transfer_money_flow(),
-        test_lost_card_flow()
-    ]
-    
-    results = await asyncio.gather(*tests, return_exceptions=True)
-    
-    # Print results
-    print(f"\n{Colors.BLUE}{'='*60}{Colors.RESET}")
-    print(f"{Colors.BLUE}Test Results{Colors.RESET}")
-    print(f"{Colors.BLUE}{'='*60}{Colors.RESET}\n")
-    
-    passed = 0
-    failed = 0
-    
-    for result in results:
-        if isinstance(result, Exception):
-            print(f"{Colors.RED}✗ Test failed with exception: {result}{Colors.RESET}")
-            failed += 1
-        else:
-            print(result)
-            print()
-            if result.passed:
-                passed += 1
-            else:
-                failed += 1
-    
-    # Summary
-    print(f"{Colors.BLUE}{'='*60}{Colors.RESET}")
-    total = passed + failed
-    pass_rate = (passed / total * 100) if total > 0 else 0
-    
-    print(f"Total: {total} tests")
-    print(f"{Colors.GREEN}Passed: {passed}{Colors.RESET}")
-    if failed > 0:
-        print(f"{Colors.RED}Failed: {failed}{Colors.RESET}")
-    print(f"Pass Rate: {pass_rate:.1f}%")
-    print(f"{Colors.BLUE}{'='*60}{Colors.RESET}\n")
-    
-    return 0 if failed == 0 else 1
-
+    print(f"\n{Colors.GREEN}Test Complete.{Colors.RESET}")
+    print(f"Output files: {OUTPUT_DIR.absolute()}")
 
 if __name__ == "__main__":
     try:
-        exit_code = asyncio.run(run_all_tests())
-        sys.exit(exit_code)
-    except KeyboardInterrupt:
-        print(f"\n{Colors.YELLOW}Tests interrupted by user{Colors.RESET}")
-        sys.exit(130)
+        asyncio.run(run_pipeline())
+    except KeyboardInterrupt: pass

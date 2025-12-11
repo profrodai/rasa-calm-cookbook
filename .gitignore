@@ -227,4 +227,6 @@ flat.txt
 
 recipes/level-2-intermediate/sovereign-voice-assistant/.neutts_cache/
 recipes/level-2-intermediate/sovereign-voice-assistant/tests/audio
+recipes/level-2-intermediate/sovereign-voice-assistant/tests/audio_responses_real/
+recipes/level-2-intermediate/sovereign-voice-assistant/test_output.wav
 
