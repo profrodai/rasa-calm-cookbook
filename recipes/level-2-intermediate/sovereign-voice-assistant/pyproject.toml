@@ -58,6 +58,14 @@ voice-neutts = [
     "transformers>=4.56.1",
 ]
 
+# Local ASR with Faster-Whisper (sovereign stack)
+voice-local-asr = [
+    "faster-whisper>=1.0.0",
+    "websockets>=10.0",
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+]
+
 # Testing
 test = [
     "pytest>=7.0.0",

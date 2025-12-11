@@ -21,8 +21,8 @@ ENV_EXAMPLE := .env.example
 
 # Include environment variables
 ifneq (,$(wildcard $(ENV_FILE)))
-    include $(ENV_FILE)
-    export
+	include $(ENV_FILE)
+	export
 endif
 
 help: ## Show this help message
@@ -1081,4 +1081,15 @@ print("  ✓ Your PR changes are active!" if (has_try and has_espeak) else "  �
 	@echo "${GREEN}✓ Ready to test!${RESET}"
 	@echo "  Run: ${GREEN}make test-neutts-quick${RESET}"
 
+.PHONY: install-local-asr
+install-local-asr: check-venv ## Install Local ASR (Faster-Whisper) dependencies
+	@echo "${BLUE}Installing Local ASR dependencies...${RESET}"
+	@$(UV) pip install "faster-whisper" "websockets" "numpy" "scipy" --python $(PYTHON)
+	@echo "${GREEN}✓ Local ASR dependencies installed${RESET}"
+
+.PHONY: run-local-asr
+run-local-asr: check-venv ## Start the Local ASR WebSocket Server
+	@echo "${BLUE}Starting Local ASR Server (Faster-Whisper)...${RESET}"
+	@echo "${YELLOW}Note: First run will download the model (approx 500MB)${RESET}"
+	@$(PYTHON) services/local_asr_server.py
 .DEFAULT_GOAL := help
