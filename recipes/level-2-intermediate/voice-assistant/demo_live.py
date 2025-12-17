@@ -9,12 +9,15 @@ from dotenv import load_dotenv
 import aiohttp
 from pydub import AudioSegment
 from pydub.playback import play
-from rich.console import Console
+
+# Rich UI Imports
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.layout import Layout
 from rich.live import Live
 from rich.text import Text
 from rich.align import Align
+from rich import box
 
 # Load env variables
 load_dotenv()
@@ -36,6 +39,7 @@ CONVERSATION_STEPS = [
 ]
 
 def make_layout():
+    """Define the 3-section layout: Header, Chat History, Status Footer."""
     layout = Layout()
     layout.split_column(
         Layout(name="header", size=3),
@@ -63,7 +67,10 @@ async def deepgram_transcribe(audio_path: Path) -> str:
     async with aiohttp.ClientSession() as session:
         async with session.post(url, headers=headers, data=audio_data) as resp:
             data = await resp.json()
-            return data['results']['channels'][0]['alternatives'][0]['transcript']
+            # Handle potential Deepgram errors gracefully
+            if 'results' in data:
+                return data['results']['channels'][0]['alternatives'][0]['transcript']
+            return "[Error: Transcribe Failed]"
 
 async def rime_tts(text: str) -> bytes:
     """Send text to Rime."""
@@ -84,39 +91,70 @@ async def rime_tts(text: str) -> bytes:
         async with session.post(url, headers=headers, json=payload) as resp:
             data = await resp.json()
             import base64
-            # Rime usually returns base64 in audioContent
-            return base64.b64decode(data['audioContent'])
+            if 'audioContent' in data:
+                return base64.b64decode(data['audioContent'])
+            return b""
 
 async def run_demo():
     layout = make_layout()
     
+    # Header Styling
     header_text = Text("🎁 Unwrap the Future: Voice Orchestration", style="bold white on magenta", justify="center")
-    layout["header"].update(Panel(header_text))
+    layout["header"].update(Panel(header_text, style="magenta"))
     
-    with Live(layout, refresh_per_second=4) as live:
+    # Store full history here
+    full_history = []
+    
+    # CONFIG: How many chat bubbles to show at once?
+    # Adjust this based on your screen size (6 is usually safe for standard terminals)
+    MAX_VISIBLE_BUBBLES = 6
+
+    def update_chat_view():
+        """Helper to render only the latest messages."""
+        # Slice to get only the last N items
+        visible_history = full_history[-MAX_VISIBLE_BUBBLES:]
+        layout["main"].update(
+            Panel(
+                Group(*visible_history), 
+                title="Conversation Log", 
+                border_style="white",
+                padding=(1, 1)
+            )
+        )
+
+    with Live(layout, refresh_per_second=10, screen=True) as live:
         
         for step in CONVERSATION_STEPS:
             audio_path = AUDIO_DIR / step['file']
             
             # --- STATE: USER SPEAKING ---
-            status = Text(f"🔊 User is speaking... [{step['label']}]", style="bold cyan")
-            layout["status"].update(Panel(status))
-            layout["main"].update(Panel(Align.center(Text("Listening...", style="dim cyan")), title="User"))
+            status_text = f"🔊 User is speaking... [{step['label']}]"
+            layout["status"].update(Panel(Text(status_text, style="bold cyan"), title="Status", border_style="cyan"))
             
             # Play user audio
             play(AudioSegment.from_wav(str(audio_path)))
             
             # --- STATE: TRANSCRIBING ---
-            layout["status"].update(Panel(Text("⚡ Deepgram Transcribing...", style="bold yellow")))
+            layout["status"].update(Panel(Text("⚡ Deepgram Transcribing...", style="bold yellow"), title="Status", border_style="yellow"))
             transcript = await deepgram_transcribe(audio_path)
             
-            main_display = Text()
-            main_display.append(f"User: ", style="bold cyan")
-            main_display.append(f"{transcript}\n\n")
-            layout["main"].update(Panel(main_display, title="Conversation Log"))
+            # Add User Message
+            user_panel = Align.left(
+                Panel(
+                    Text(transcript, style="bright_white"),
+                    title="User",
+                    style="cyan",
+                    box=box.ROUNDED,
+                    padding=(1, 2),
+                    width=60
+                )
+            )
+            full_history.append(user_panel)
+            update_chat_view()  # <--- FORCE SCROLL UPDATE
             
             # --- STATE: RASA THINKING ---
-            layout["status"].update(Panel(Text("🧠 Rasa Thinking...", style="bold green")))
+            layout["status"].update(Panel(Text("🧠 Rasa Thinking...", style="bold green"), title="Status", border_style="green"))
+            
             async with aiohttp.ClientSession() as session:
                 async with session.post(RASA_URL, json={"sender": "demo-user", "message": transcript}) as resp:
                     bot_responses = await resp.json()
@@ -126,22 +164,30 @@ async def run_demo():
                 if 'text' in response:
                     agent_text = response['text']
                     
-                    # Update UI
-                    main_display.append(f"Agent: ", style="bold green")
-                    main_display.append(f"{agent_text}\n")
-                    layout["main"].update(Panel(main_display, title="Conversation Log"))
+                    # Add Agent Message
+                    agent_panel = Align.right(
+                        Panel(
+                            Text(agent_text, style="bright_white"),
+                            title="Agent",
+                            style="green",
+                            box=box.ROUNDED,
+                            padding=(1, 2),
+                            width=60
+                        )
+                    )
+                    full_history.append(agent_panel)
+                    update_chat_view()  # <--- FORCE SCROLL UPDATE
                     
-                    layout["status"].update(Panel(Text("🗣️ Rime Generating & Speaking...", style="bold magenta")))
+                    layout["status"].update(Panel(Text("🗣️ Rime Generating & Speaking...", style="bold magenta"), title="Status", border_style="magenta"))
                     
                     # Generate and Play
                     audio_bytes = await rime_tts(agent_text)
                     await play_audio_data(audio_bytes)
 
-            time.sleep(1) # Dramatic pause
+            time.sleep(0.5) 
 
-        layout["status"].update(Panel(Text("✨ Demo Complete", style="bold white on green")))
-        # Keep the final screen visible for a moment
-        await asyncio.sleep(5)
+        layout["status"].update(Panel(Text("✨ Demo Complete", style="bold white on green"), title="Status", border_style="green"))
+        await asyncio.sleep(10)
 
 if __name__ == "__main__":
     try:
