@@ -1,4 +1,4 @@
-# recipes/level-2-intermediate/sovereign-voice-assistant/tests/test_voice_full_pipeline.py
+# tests/test_voice_full_pipeline.py
 #!/usr/bin/env python3
 """
 Automated Voice Testing - Full Pipeline

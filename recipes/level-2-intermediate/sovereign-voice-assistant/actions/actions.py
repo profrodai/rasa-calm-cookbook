@@ -1,4 +1,4 @@
-# recipes/level-2-intermediate/sovereign-voice-assistant/actions/actions.py
+# actions/actions.py
 
 from typing import Any, Text, Dict, List
 from rasa_sdk import Action, Tracker

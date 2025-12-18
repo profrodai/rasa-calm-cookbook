@@ -1,4 +1,4 @@
-# recipes/level-2-intermediate/sovereign-voice-assistant/endpoints.yml
+# endpoints.yml
 # This file configures external services that Rasa connects to
 
 # ==============================================================================

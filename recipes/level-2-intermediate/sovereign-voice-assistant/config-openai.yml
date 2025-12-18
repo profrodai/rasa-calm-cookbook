@@ -1,4 +1,4 @@
-# recipes/level-2-intermediate/sovereign-voice-assistant/config-openai.yml
+# config-openai.yml
 # REFERENCE CONFIGURATION - OpenAI Provider
 # This is an example configuration showing how to use OpenAI
 # To use this configuration, copy the relevant sections to config.yml

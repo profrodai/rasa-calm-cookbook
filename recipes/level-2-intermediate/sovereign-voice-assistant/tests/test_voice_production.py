@@ -1,4 +1,4 @@
-# recipes/level-2-intermediate/sovereign-voice-assistant/tests/test_voice_production.py
+# tests/test_voice_production.py
 #!/usr/bin/env python3
 """
 Production Voice Testing with Real ASR/TTS

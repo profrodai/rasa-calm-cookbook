@@ -1,4 +1,4 @@
-# recipes/level-2-intermediate/sovereign-voice-assistant/tests/e2e_test_cases.yml
+# tests/e2e_test_cases.yml
 test_cases:
   - test_case: check balance
     steps:

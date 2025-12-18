@@ -1,4 +1,4 @@
-# recipes/level-2-intermediate/sovereign-voice-assistant/config-local.yml
+# config-local.yml
 # REFERENCE CONFIGURATION - Self-Hosted LLM (vLLM or similar)
 # This is an example configuration showing how to use a self-hosted LLM server
 # Note: This differs from Ollama configuration (see config.yml for Ollama setup)

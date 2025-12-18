@@ -1,4 +1,4 @@
-# recipes/level-2-intermediate/sovereign-voice-assistant/pyproject.toml
+# pyproject.toml
 [project]
 name = "voice-assistant"
 version = "0.1.0"

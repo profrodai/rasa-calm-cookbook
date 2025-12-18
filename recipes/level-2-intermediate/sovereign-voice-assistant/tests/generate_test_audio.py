@@ -1,4 +1,4 @@
-# recipes/level-2-intermediate/sovereign-voice-assistant/tests/generate_test_audio.py
+# tests/generate_test_audio.py
 #!/usr/bin/env python3
 """
 Generate Test Audio Files for Automated Voice Testing

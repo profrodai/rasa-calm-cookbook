@@ -1,4 +1,4 @@
-# recipes/level-2-intermediate/sovereign-voice-assistant/services/neutts_service.py
+# services/neutts_service.py
 import os
 import io
 import platform

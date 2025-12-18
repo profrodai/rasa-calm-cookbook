@@ -1,4 +1,4 @@
-# recipes/level-2-intermediate/sovereign-voice-assistant/config.yml
+# config.yml
 # Main configuration - switch between providers by changing model_group reference
 recipe: default.v1
 language: en
